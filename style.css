@@ -1,0 +1,311 @@
+:root {
+    /* --- NEW THEME: Blue & Dark Gray --- */
+
+    /* Backgrounds: Deep Slate Blue */
+    --bg-dark: #0f172a;
+    /* Very dark slate */
+    --card-bg: #1e293b;
+    /* Lighter slate for cards */
+
+    /* Primary: Electric/Tech Blue */
+    --primary: #3b82f6;
+    /* Vibrant Blue */
+    --primary-hover: #2563eb;
+    /* Darker Blue */
+
+    /* Accents & Text */
+    --accent-gray: #94a3b8;
+    /* Light Gray for accents/logo text */
+    --border-color: #334155;
+    /* Dark Gray Lines */
+
+    --text-light: #f8fafc;
+    /* White-ish */
+    --text-muted: #cbd5e1;
+    /* Light Slate Gray */
+    --danger: #ef4444;
+    /* Red */
+    --success: #22c55e;
+    /* Green */
+
+    /* Spacing */
+    --spacing-sm: 8px;
+    --spacing-md: 16px;
+    --spacing-lg: 24px;
+    --radius-md: 12px;
+    --radius-lg: 20px;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+body {
+    background-color: var(--bg-dark);
+    color: var(--text-light);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+/* --- Branding --- */
+.app-header {
+    padding: 24px;
+    text-align: center;
+    background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+    border-bottom: 2px solid var(--border-color);
+}
+
+.app-logo {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, var(--primary) 0%, #1e40af 100%);
+    border-radius: 50%;
+    margin: 0 auto 16px auto;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    border: 2px solid var(--border-color);
+}
+
+.logo-text {
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: #e2e8f0;
+    /* Light Gray text on Blue bg */
+    letter-spacing: -2px;
+}
+
+.app-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-light);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+/* --- Container --- */
+.app-container {
+    width: 100%;
+    max-width: 480px;
+    height: 100vh;
+    background-color: var(--bg-dark);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+}
+
+.view {
+    display: none;
+    flex: 1;
+    /* Fill remaining space */
+    overflow-y: auto;
+    /* Enable scrolling */
+    padding: 16px;
+    animation: fadeIn 0.3s ease;
+}
+
+.view.active {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* --- Cards & UI --- */
+.card {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+}
+
+h2 {
+    font-size: 1.1rem;
+    margin-bottom: 16px;
+    color: var(--text-light);
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 8px;
+}
+
+/* Inputs */
+.form-group {
+    margin-bottom: 16px;
+    text-align: left;
+}
+
+label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+input,
+select {
+    width: 100%;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-dark);
+    color: var(--text-light);
+    font-size: 1rem;
+    transition: 0.2s;
+}
+
+input:focus,
+select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+/* Buttons */
+.btn {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.2s;
+    margin-bottom: 8px;
+}
+
+.btn:active {
+    transform: scale(0.98);
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--primary) 0%, #2563eb 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.btn-outline {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+}
+
+.btn-outline:hover {
+    border-color: var(--primary);
+    color: var(--text-light);
+    background: rgba(59, 130, 246, 0.1);
+}
+
+.btn-danger {
+    background-color: rgba(255, 77, 77, 0.1);
+    border: 1px solid var(--danger-red);
+}
+
+/* Specific Views */
+.dashboard-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-md);
+}
+
+.status-indicator {
+    text-align: center;
+    padding: var(--spacing-lg);
+    margin-bottom: var(--spacing-md);
+    background: rgba(255, 215, 0, 0.05);
+    border-radius: var(--radius-lg);
+    border: 1px solid rgba(255, 215, 0, 0.2);
+}
+
+.status-icon {
+    font-size: 3rem;
+    margin-bottom: var(--spacing-sm);
+    display: block;
+}
+
+.coordinates-display {
+    font-family: monospace;
+    background: rgba(0, 0, 0, 0.3);
+    padding: var(--spacing-sm);
+    border-radius: var(--radius-md);
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+/* Animations */
+.pulse-animation {
+    animation: pulse-yellow 2s infinite;
+}
+
+@keyframes pulse-yellow {
+    0% {
+        box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.7);
+    }
+
+    70% {
+        box-shadow: 0 0 0 10px rgba(255, 215, 0, 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(255, 215, 0, 0);
+    }
+}
+
+/* Logs Table */
+.logs-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: var(--spacing-md);
+}
+
+.logs-table th,
+.logs-table td {
+    text-align: left;
+    padding: var(--spacing-sm);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 0.9rem;
+}
+
+.logs-table th {
+    color: var(--accent-yellow);
+    font-weight: 600;
+}
+
+.logs-table td {
+    color: var(--text-muted);
+}
+
+/* Debug Controls */
+.debug-controls {
+    margin-top: var(--spacing-lg);
+    padding: var(--spacing-md);
+    border: 1px dashed rgba(255, 255, 255, 0.2);
+    border-radius: var(--radius-md);
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.debug-title {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-bottom: var(--spacing-sm);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}

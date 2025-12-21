@@ -178,6 +178,7 @@ class HRApp {
 
             // Proceed to Login
             this.currentUser = { username: this.pendingUser.username, ...user };
+            localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
             this.pendingUser = null;
 
             if (!this.mockDB.companies[user.companyId] && user.role === 'manager') {
@@ -272,6 +273,7 @@ class HRApp {
 
         // Login Success
         this.currentUser = { username, ...user };
+        localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
 
         this.showView(user.role === 'manager' ? 'view-manager' : 'view-employee');
         this.refreshDashboard();
@@ -287,6 +289,7 @@ class HRApp {
         }
 
         this.currentUser = null;
+        localStorage.removeItem('hrapp_user');
         this.showView('view-auth');
         // Stop timer
         if (this.timerInterval) clearInterval(this.timerInterval);

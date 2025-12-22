@@ -44,7 +44,11 @@
                 </div>
                 <div class="form-group">
                     <label>Company ID</label>
-                    <input type="text" id="auth-company" placeholder="e.g., DEMO">
+                    <input type="text" id="auth-company" placeholder="Enter Company ID">
+                </div>
+                <div class="form-group">
+                    <label>Passcode (Optional)</label>
+                    <input type="password" id="auth-passcode" placeholder="PIN if set">
                 </div>
                 <button class="btn btn-primary" onclick="app.login()">Login</button>
                 <div
@@ -66,14 +70,14 @@
                 <div style="font-size: 3rem; margin-bottom: 16px;">✉️</div>
                 <h2>Verify Your Email</h2>
                 <p style="color: var(--text-muted); margin-bottom: 24px;">
-                    We sent a 4-digit code to your email.<br>
-                    <small>(Hint: use <b>1234</b>)</small>
+                    We sent a verification code to your contact.<br>
+                    <small id="verify-hint">(Check console or alert for code)</small>
                 </p>
                 <div class="form-group">
                     <input type="text" id="verify-code" placeholder="Enter Code (e.g. 1234)"
                         style="text-align: center; letter-spacing: 4px; font-size: 1.2rem;">
                 </div>
-                <button class="btn btn-primary" onclick="app.verifyEmail()">Verify Account</button>
+                <button class="btn btn-primary" onclick="app.verifyAccount()">Verify Account</button>
                 <button class="btn btn-outline" onclick="app.logout()">Cancel</button>
             </div>
         </div>
@@ -106,8 +110,16 @@
                     <input type="text" id="reg-emp-username-self" placeholder="Choose a username">
                 </div>
                 <div class="form-group">
-                    <label>Email</label>
+                    <label>Email (Optional)</label>
                     <input type="email" id="reg-emp-email-self" placeholder="you@example.com">
+                </div>
+                <div class="form-group">
+                    <label>Phone Number (Mandatory if no Email)</label>
+                    <input type="tel" id="reg-emp-phone-self" placeholder="+1 234 567 8900">
+                </div>
+                <div class="form-group">
+                    <label>Create Passcode (Optional)</label>
+                    <input type="password" id="reg-emp-passcode-self" placeholder="Set a login PIN" maxlength="6">
                 </div>
                 <button class="btn btn-primary" onclick="app.registerNewEmployeeUser()">Create Account</button>
                 <button class="btn btn-outline" onclick="app.showView('view-auth')">Back to Login</button>
@@ -147,8 +159,12 @@
                     <input type="text" id="new-emp-username" placeholder="Existing username">
                 </div>
                 <div class="form-group">
-                    <label>Employee Email</label>
-                    <input type="email" id="new-emp-email" placeholder="Email contact">
+                    <label>Employee Contact (Email or Phone)</label>
+                    <input type="text" id="new-emp-contact" placeholder="Email or Phone">
+                </div>
+                <div class="form-group">
+                    <label>Set Passcode (Optional)</label>
+                    <input type="text" id="new-emp-passcode" placeholder="Login PIN" maxlength="6">
                 </div>
                 <button class="btn btn-primary" onclick="app.registerEmployee()">Link Employee</button>
             </div>

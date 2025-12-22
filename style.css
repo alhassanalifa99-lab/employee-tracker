@@ -1,126 +1,148 @@
 :root {
-    /* --- NEW THEME: Blue & Dark Gray --- */
+    /* --- PREMIUM THEME: Glassmorphism & Deep Blue --- */
 
-    /* Backgrounds: Deep Slate Blue */
+    /* Backgrounds: Deep Gradient */
     --bg-dark: #0f172a;
-    /* Very dark slate */
-    --card-bg: #1e293b;
-    /* Lighter slate for cards */
+    --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
 
-    /* Primary: Electric/Tech Blue */
+    /* Glassmorphism Cards */
+    --card-bg: rgba(30, 41, 59, 0.7);
+    /* Translucent */
+    --card-border: rgba(255, 255, 255, 0.1);
+    --card-blur: 12px;
+
+    /* Primary Colors */
     --primary: #3b82f6;
-    /* Vibrant Blue */
-    --primary-hover: #2563eb;
-    /* Darker Blue */
+    /* Electric Blue */
+    --primary-gradient: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    --primary-glow: rgba(59, 130, 246, 0.5);
 
-    /* Accents & Text */
-    --accent-gray: #94a3b8;
-    /* Light Gray for accents/logo text */
-    --border-color: #334155;
-    /* Dark Gray Lines */
+    /* Accents */
+    --accent-gold: #f59e0b;
+    /* Gold for status/highlights */
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
 
-    --text-light: #f8fafc;
-    /* White-ish */
-    --text-muted: #cbd5e1;
-    /* Light Slate Gray */
+    /* Functional Colors */
     --danger: #ef4444;
-    /* Red */
-    --success: #22c55e;
-    /* Green */
+    --danger-gradient: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    --success: #10b981;
+    --success-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
 
-    /* Spacing */
-    --spacing-sm: 8px;
-    --spacing-md: 16px;
-    --spacing-lg: 24px;
-    --radius-md: 12px;
-    --radius-lg: 20px;
+    /* Spacing & Radius */
+    /* Glassmorphism removed as per user request - finding solid alternatives */
+    /* --glass-bg: rgba(30, 41, 59, 0.7); from previous */
+    --glass-bg: rgba(30, 41, 59, 0.95);
+    /* More solid */
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    --radius-sm: 8px;
+    --radius-md: 16px;
+    --radius-lg: 24px;
+    --shadow-soft: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
 * {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
-    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    font-family: 'Inter', 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
 }
 
 body {
     background-color: var(--bg-dark);
+    background-image:
+        radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.15) 0px, transparent 50%),
+        radial-gradient(at 100% 0%, rgba(148, 163, 184, 0.1) 0px, transparent 50%);
+    background-attachment: fixed;
     color: var(--text-light);
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    font-family: 'Inter', 'Segoe UI', sans-serif;
     min-height: 100vh;
-}
-
-/* --- Branding --- */
-.app-header {
-    padding: 24px;
-    text-align: center;
-    background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
-    border-bottom: 2px solid var(--border-color);
-}
-
-.app-logo {
-    width: 80px;
-    height: 80px;
-    background: linear-gradient(135deg, var(--primary) 0%, #1e40af 100%);
-    border-radius: 50%;
-    margin: 0 auto 16px auto;
     display: flex;
     justify-content: center;
-    align-items: center;
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-    border: 2px solid var(--border-color);
-}
-
-.logo-text {
-    font-size: 2.5rem;
-    font-weight: 800;
-    color: #e2e8f0;
-    /* Light Gray text on Blue bg */
-    letter-spacing: -2px;
-}
-
-.app-title {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: var(--text-light);
-    letter-spacing: 1px;
-    text-transform: uppercase;
+    align-items: flex-start;
+    padding-top: 20px;
 }
 
 /* --- Container --- */
 .app-container {
     width: 100%;
     max-width: 480px;
-    height: 100vh;
-    background-color: var(--bg-dark);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    position: relative;
+    padding: 16px;
+    margin-bottom: 60px;
 }
 
+/* Desktop override to look like a phone */
+@media (min-width: 500px) {
+    .app-container {
+        height: 90vh;
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--card-border);
+    }
+}
+
+/* --- Branding --- */
+.app-header {
+    padding: 32px 24px;
+    text-align: center;
+    background: transparent;
+    z-index: 10;
+}
+
+.app-logo {
+    width: 72px;
+    height: 72px;
+    background: var(--primary-gradient);
+    border-radius: 20px;
+    margin: 0 auto 16px auto;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0 10px 25px var(--primary-glow);
+    transform: rotate(-5deg);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.logo-text {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #fff;
+    transform: rotate(5deg);
+    /* Counter rotate */
+}
+
+.app-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    background: linear-gradient(to right, #fff, #94a3b8);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* --- Views --- */
 .view {
     display: none;
     flex: 1;
-    /* Fill remaining space */
     overflow-y: auto;
-    /* Enable scrolling */
-    padding: 16px;
-    animation: fadeIn 0.3s ease;
+    padding: 20px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--card-border) transparent;
+    animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .view.active {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 20px;
 }
 
-@keyframes fadeIn {
+@keyframes slideUp {
     from {
         opacity: 0;
-        transform: translateY(10px);
+        transform: translateY(20px);
     }
 
     to {
@@ -129,67 +151,77 @@ body {
     }
 }
 
-/* --- Cards & UI --- */
+/* --- Glass Cards --- */
 .card {
-    background-color: var(--card-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
-    padding: 20px;
-    margin-bottom: 16px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+    background: var(--card-bg);
+    backdrop-filter: blur(var(--card-blur));
+    -webkit-backdrop-filter: blur(var(--card-blur));
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-md);
+    padding: 24px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(255, 255, 255, 0.2);
 }
 
 h2 {
     font-size: 1.1rem;
-    margin-bottom: 16px;
-    color: var(--text-light);
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 8px;
+    margin-bottom: 20px;
+    color: var(--text-main);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
-/* Inputs */
+/* --- Forms --- */
 .form-group {
-    margin-bottom: 16px;
-    text-align: left;
+    margin-bottom: 20px;
 }
 
 label {
     display: block;
-    margin-bottom: 6px;
-    font-size: 0.9rem;
+    margin-bottom: 8px;
+    font-size: 0.85rem;
     color: var(--text-muted);
+    font-weight: 500;
 }
 
 input,
 select {
     width: 100%;
-    padding: 12px;
-    border-radius: 8px;
-    border: 1px solid var(--border-color);
-    background-color: var(--bg-dark);
-    color: var(--text-light);
+    padding: 14px 16px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--card-border);
+    background: rgba(0, 0, 0, 0.2);
+    color: white;
     font-size: 1rem;
-    transition: 0.2s;
+    transition: all 0.2s;
 }
 
 input:focus,
 select:focus {
     outline: none;
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+    background: rgba(0, 0, 0, 0.4);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
 }
 
-/* Buttons */
+/* --- Buttons --- */
 .btn {
     width: 100%;
-    padding: 14px;
+    padding: 16px;
     border: none;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     font-size: 1rem;
     font-weight: 600;
     cursor: pointer;
-    transition: transform 0.1s, box-shadow 0.2s;
-    margin-bottom: 8px;
+    transition: all 0.2s;
+    letter-spacing: 0.5px;
 }
 
 .btn:active {
@@ -197,115 +229,289 @@ select:focus {
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, var(--primary) 0%, #2563eb 100%);
+    background: var(--primary-gradient);
     color: white;
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.btn-primary:hover {
+    box-shadow: 0 6px 20px rgba(37, 99, 235, 0.6);
 }
 
 .btn-outline {
     background: transparent;
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--card-border);
     color: var(--text-muted);
 }
 
 .btn-outline:hover {
-    border-color: var(--primary);
-    color: var(--text-light);
-    background: rgba(59, 130, 246, 0.1);
+    border-color: var(--text-main);
+    color: var(--text-main);
+    background: rgba(255, 255, 255, 0.05);
 }
 
 .btn-danger {
-    background-color: rgba(255, 77, 77, 0.1);
-    border: 1px solid var(--danger-red);
+    background: var(--danger-gradient);
+    color: white;
+    box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4);
 }
 
-/* Specific Views */
-.dashboard-actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--spacing-md);
+/* --- Dynamic Content Classes (for script.js) --- */
+.list-item,
+.site-item,
+.team-member-item {
+    background: rgba(255, 255, 255, 0.05);
+    /* Subtle light overlay */
+    padding: 12px;
+    margin-bottom: 8px;
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
-.status-indicator {
-    text-align: center;
-    padding: var(--spacing-lg);
-    margin-bottom: var(--spacing-md);
-    background: rgba(255, 215, 0, 0.05);
-    border-radius: var(--radius-lg);
-    border: 1px solid rgba(255, 215, 0, 0.2);
+.site-header {
+    font-size: 1rem;
+    color: var(--accent-gold);
+    border-bottom: 1px solid var(--card-border);
+    padding-bottom: 4px;
+    margin-bottom: 8px;
+    margin-top: 16px;
 }
 
-.status-icon {
-    font-size: 3rem;
-    margin-bottom: var(--spacing-sm);
-    display: block;
-}
-
-.coordinates-display {
-    font-family: monospace;
-    background: rgba(0, 0, 0, 0.3);
-    padding: var(--spacing-sm);
-    border-radius: var(--radius-md);
-    font-size: 0.85rem;
+.text-sub {
+    font-size: 0.8rem;
     color: var(--text-muted);
 }
 
-/* Animations */
-.pulse-animation {
-    animation: pulse-yellow 2s infinite;
+.t-danger {
+    color: var(--danger);
 }
 
-@keyframes pulse-yellow {
+.t-success {
+    color: var(--success);
+}
+
+/* --- Animations --- */
+.pulse-animation {
+    animation: pulse-gold 2s infinite;
+}
+
+@keyframes pulse-gold {
     0% {
-        box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.7);
+        box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4);
     }
 
     70% {
-        box-shadow: 0 0 0 10px rgba(255, 215, 0, 0);
+        box-shadow: 0 0 0 10px rgba(245, 158, 11, 0);
     }
 
     100% {
-        box-shadow: 0 0 0 0 rgba(255, 215, 0, 0);
+        box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
     }
 }
 
-/* Logs Table */
+/* --- USER REQUESTED NATIVE FEEL STYLES --- */
+
+/* 1. Prevent accidental zooming and scrolling bounce */
+html,
+body {
+    overflow-x: hidden;
+    overscroll-behavior-y: contain;
+    user-select: none;
+    /* Prevents text highlighting like a website */
+    -webkit-tap-highlight-color: transparent;
+    /* Removes the blue box on tap */
+}
+
+/* 2. Create a 'Floating' Check-in Button at the bottom */
+.check-in-container {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    max-width: 450px;
+    z-index: 1000;
+    pointer-events: none;
+    /* Let clicks pass through if empty, buttons need pointer-events: auto */
+}
+
+.check-in-container>button {
+    pointer-events: auto;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    /* Stronger shadow for floating element */
+}
+
+/* 3. Add 'Haptic' feedback on buttons */
+button:active {
+    transform: scale(0.96);
+    filter: brightness(0.9);
+    transition: transform 0.1s;
+}
+
+/* 4. Smooth 'Native' Lists for Logs */
+/* Applied to the container of the logs table */
+.log-table-container {
+    border-radius: 15px;
+    background: rgba(255, 255, 255, 0.05);
+    /* Adjusted to match dark theme better than 0.7 white */
+    backdrop-filter: blur(10px);
+    /* Glass effect as requested */
+    -webkit-backdrop-filter: blur(10px);
+    -webkit-overflow-scrolling: touch;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+    /* Ensure rounded corners clip content */
+}
+
 .logs-table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: var(--spacing-md);
 }
 
 .logs-table th,
 .logs-table td {
+    padding: 12px;
     text-align: left;
-    padding: var(--spacing-sm);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    font-size: 0.9rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .logs-table th {
-    color: var(--accent-yellow);
-    font-weight: 600;
+    background: rgba(0, 0, 0, 0.2);
+    font-size: 0.85rem;
+    color: var(--text-muted);
 }
 
 .logs-table td {
-    color: var(--text-muted);
+    font-size: 0.9rem;
 }
 
-/* Debug Controls */
-.debug-controls {
-    margin-top: var(--spacing-lg);
-    padding: var(--spacing-md);
-    border: 1px dashed rgba(255, 255, 255, 0.2);
+/* --- Status Indicators --- */
+.status-indicator {
+    text-align: center;
+    padding: 32px;
+    background: rgba(255, 255, 255, 0.03);
     border-radius: var(--radius-md);
-    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--card-border);
+    margin-bottom: 24px;
 }
 
-.debug-title {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    margin-bottom: var(--spacing-sm);
+.status-icon {
+    font-size: 3.5rem;
+    margin-bottom: 12px;
+    display: block;
+    filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.2));
+}
+
+#emp-status-text {
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+/* --- Tables & Lists --- */
+.logs-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 4px;
+    /* Row spacing */
+}
+
+.logs-table th {
+    text-align: left;
+    font-size: 0.75rem;
+    color: var(--accent-gold);
     text-transform: uppercase;
-    letter-spacing: 1px;
+    padding: 8px 12px;
+}
+
+.logs-table td {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 12px;
+    font-size: 0.9rem;
+}
+
+.logs-table tr td:first-child {
+    border-top-left-radius: 8px;
+    border-bottom-left-radius: 8px;
+}
+
+.logs-table tr td:last-child {
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 8px;
+}
+
+/* --- Debug --- */
+.debug-controls {
+    margin-top: 32px;
+    padding: 16px;
+    border: 1px dashed var(--card-border);
+    border-radius: var(--radius-md);
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+
+.debug-controls:hover {
+    opacity: 1;
+}
+
+/* --- Utility Classes --- */
+.text-center {
+    text-align: center;
+}
+
+.text-small {
+    font-size: 0.85rem;
+}
+
+.monospace-text {
+    font-family: monospace;
+}
+
+.gps-status-warning {
+    color: var(--accent-gold);
+    background: rgba(245, 158, 11, 0.1);
+    padding: 8px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.85rem;
+}
+
+.gps-status-success {
+    color: var(--success);
+    background: rgba(16, 185, 129, 0.1);
+    padding: 8px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.85rem;
+}
+
+.btn-retry-gps {
+    background: transparent;
+    border: 1px solid currentColor;
+    color: inherit;
+    padding: 4px 8px;
+    font-size: 0.75rem;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.site-status-group {
+    margin-bottom: 24px;
+}
+
+.team-member-name {
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--text-main);
+}
+
+.team-member-status-icon {
+    font-size: 1.25rem;
 }

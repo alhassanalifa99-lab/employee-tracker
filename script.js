@@ -128,8 +128,13 @@ class HRApp {
         this.mockDB.users[managerName] = {
             role: 'manager',
             companyId: companyId,
-            verified: false // Email Verification Required
+            verified: false,
+            verifyCode: Math.floor(1000 + Math.random() * 9000).toString(),
+            history: [] // Init History
         };
+
+        // SIMULATE SENDING CODE
+        alert(`📨 SIMULATION: Manager Verification Code: ${this.mockDB.users[managerName].verifyCode}`);
 
         this.saveDB();
 
@@ -142,29 +147,52 @@ class HRApp {
     registerNewEmployeeUser() {
         const username = document.getElementById('reg-emp-username-self').value.trim().toLowerCase();
         const email = document.getElementById('reg-emp-email-self').value.trim();
+        const phone = document.getElementById('reg-emp-phone-self').value.trim();
+        const passcode = document.getElementById('reg-emp-passcode-self').value.trim();
 
-        if (!username || !email) return alert("Please fill all fields");
+        if (!username) return alert("Please enter a username.");
+        if (!email && !phone) return alert("Please provide either Email OR Phone number.");
         if (this.mockDB.users[username]) return alert("Username already taken!");
+
+        // Generate Verification Code
+        const verifyCode = Math.floor(1000 + Math.random() * 9000).toString();
 
         // Create Unassigned User
         this.mockDB.users[username] = {
             role: 'employee',
             companyId: null,
             email: email,
+            phone: phone,
+            passcode: passcode || null, // Optional Passcode
             assignedSiteId: null,
             status: 'checked-out',
-            verified: false // Email Verification Required
+            verified: false, // Verification Required
+            verifyCode: verifyCode, // Store the code
+            history: [] // Init History
         };
 
         this.saveDB();
-        alert(`🎉 Account Created! Please Login to Verify your Email.`);
+
+        // SIMULATE SENDING CODE
+        const contact = email || phone;
+        alert(`📨 SIMULATION: Verification Code sent to ${contact}.\n\nCode: ${verifyCode}`);
+        console.log(`[SIMULATION] Code for ${username}: ${verifyCode}`);
+
+        alert(`🎉 Account Created! Please Login to Verify.`);
         this.showView('view-auth');
     }
 
     // --- VERIFICATION ---
-    verifyEmail() {
-        const code = document.getElementById('verify-code').value.trim();
-        if (code !== "1234") {
+    verifyAccount() {
+        const codeInput = document.getElementById('verify-code').value.trim();
+
+        if (!this.pendingUser) return this.showView('view-auth');
+
+        // Get Latest User Data
+        const user = this.mockDB.users[this.pendingUser.username];
+
+        // Check Code
+        if (codeInput !== user.verifyCode && codeInput !== "1234") { // Keep 1234 as master backdoor for testing
             return alert("❌ Invalid Code. Please try again.");
         }
 
@@ -220,6 +248,13 @@ class HRApp {
             return alert(`❌ Incorrect Company ID.\nThis user belongs to company: ${user.companyId}`);
         }
 
+        // --- PASSCODE CHECK (Optional) ---
+        if (user.passcode) {
+            const passInput = document.getElementById('auth-passcode').value.trim();
+            if (!passInput) return alert(`🔒 This account is protected.\nEnter your Passcode to login.`);
+            if (passInput !== user.passcode) return alert(`❌ Invalid Passcode.`);
+        }
+
         // --- EMAIL VERIFICATION CHECK ---
         if (user.verified === false) {
             this.pendingUser = { username, ...user };
@@ -260,7 +295,7 @@ class HRApp {
 
             if (!site) return alert("Error: Assigned Worksite not found. Contact Manager.");
 
-            const dist = this.getDistanceFromLatLonInMiters(
+            const dist = this.getDistanceFromLatLonInMeters(
                 this.currentPosition.lat, this.currentPosition.lng,
                 site.lat, site.lng
             );
@@ -280,13 +315,8 @@ class HRApp {
     }
 
     logout() {
-        // Auto-checkout if employee is currently checked in
-        if (this.currentUser && this.currentUser.role === 'employee') {
-            const user = this.mockDB.users[this.currentUser.username];
-            if (user && user.status === 'checked-in') {
-                this.checkOut("Auto Check-Out (Logout)");
-            }
-        }
+        // User requested to REMOVE auto-checkout on logout
+        // The employee remains 'checked-in' even if they log out of the device.
 
         this.currentUser = null;
         localStorage.removeItem('hrapp_user');
@@ -298,14 +328,28 @@ class HRApp {
     // --- Geolocation ---
 
     watchLocation() {
+        // 1. Check Secure Context (Required for Geolocation)
+        if (!window.isSecureContext && window.location.hostname !== 'localhost') {
+            const statusEl = document.getElementById('auth-gps-status');
+            if (statusEl) statusEl.innerHTML = `<span style="color:var(--danger)">⚠️ Error: App must use HTTPS.</span>`;
+            return alert("GPS REQUIREMENT MISSING:\n\nThis app must be run over HTTPS (Secure Encription) to use Location features.\n\nPlease check your URL.");
+        }
+
         if (!navigator.geolocation) {
             alert("Geolocation is not supported by your browser");
             return;
         }
 
-        // Update UI to show we are trying
+        // Update UI
         const statusEl = document.getElementById('auth-gps-status');
-        if (statusEl) statusEl.innerHTML = `<span>🔄 Acquiring Signal...</span>`;
+        if (statusEl) statusEl.innerHTML = `<span>🔄 Trying High Precision GPS... (5s)</span>`;
+
+        // AGGRESSIVE STRATEGY: Try High Accuracy for 5s
+        const options = {
+            enableHighAccuracy: true,
+            maximumAge: 0,
+            timeout: 5000
+        };
 
         this.watchId = navigator.geolocation.watchPosition(
             (position) => {
@@ -313,32 +357,80 @@ class HRApp {
                     lat: position.coords.latitude,
                     lng: position.coords.longitude
                 };
-                this.updateUIWithLocation(); // Updates all views
+                this.updateUIWithLocation();
 
-                // Monitor Geofence if Logged In as Employee
                 if (this.currentUser && this.currentUser.role === 'employee') {
                     this.monitorGeofence();
                 }
             },
             (error) => {
-                console.error("Error watching position:", error);
+                console.error("GPS Watch Error:", error);
 
-                let msg = "GPS Error";
-                if (error.code === 1) msg = "⚠️ Location Denied.";
-                if (error.code === 2) msg = "⚠️ Unavailable.";
-                if (error.code === 3) msg = "⚠️ Timeout.";
+                // If High Accuracy fails (timeout or unavailable), switch to Low immediately
+                if (error.code === 3 || error.code === 2) {
+                    if (statusEl) statusEl.innerHTML = `<span>📶 Switching to WiFi/Cell Network...</span>`;
+                    console.log("High Acc failed. Falling back to Low Accuracy...");
 
-                // Update Login UI Status - SOFT WARNING
-                if (statusEl) {
-                    statusEl.innerHTML = `<span style="color:var(--accent-gray);">${msg} (Manager Login OK)</span> <button onclick="app.watchLocation()" style="background:none; border:1px solid currentColor; color:inherit; padding:2px 6px; font-size:0.7rem; cursor:pointer; border-radius:4px;">RETRY</button>`;
+                    navigator.geolocation.clearWatch(this.watchId); // Stop broken watcher
+
+                    // Start Low Accuracy Watcher with VERY permissible options
+                    this.watchId = navigator.geolocation.watchPosition(
+                        (pos) => {
+                            this.currentPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                            this.updateUIWithLocation();
+                            if (this.currentUser && this.currentUser.role === 'employee') {
+                                this.monitorGeofence();
+                            }
+                        },
+                        (err) => {
+                            console.error("Low accuracy also failed", err);
+                            let lowMsg = "Unknown Error";
+                            if (err.code === 1) lowMsg = "Permission Denied";
+                            if (err.code === 2) lowMsg = "Signal Unavailable";
+                            if (err.code === 3) lowMsg = "Timeout";
+
+                            if (statusEl) {
+                                statusEl.innerHTML = `
+                                    <div class="gps-status-message gps-status-warning">
+                                        <span>⚠️ Failed: ${lowMsg}</span>
+                                        <div style="display:flex; gap:8px; justify-content:center; margin-top:4px;">
+                                            <button onclick="app.watchLocation()" class="btn-retry-gps">RETRY</button>
+                                            <button onclick="app.useMockLocation()" class="btn-retry-gps" style="background:var(--primary-gradient); border:none;">USE MOCK LOC</button>
+                                        </div>
+                                    </div>`;
+                            }
+                        },
+                        {
+                            enableHighAccuracy: false,
+                            timeout: 60000, // Wait up to 60s for anything
+                            maximumAge: Infinity // Accept cached positions
+                        }
+                    );
+                } else {
+                    // Denied (Code 1) -> User must fix settings
+                    let msg = "GPS Error";
+                    if (error.code === 1) msg = "⚠️ Location Permission Denied.";
+                    if (statusEl) statusEl.innerHTML = `
+                        <div class="gps-status-message gps-status-warning" style="background: rgba(239, 68, 68, 0.2); border: 1px solid var(--danger);">
+                            <div style="font-weight:bold;">⚠️ GPS Error ${error.code}: ${msg}</div>
+                            <button onclick="app.useMockLocation()" class="btn-retry-gps" style="margin-top:4px; width:100%; background:var(--primary);">USE MOCK LOCATION</button>
+                        </div>`;
                 }
             },
-            {
-                enableHighAccuracy: true,
-                maximumAge: 0,
-                timeout: 10000
-            }
+            options
         );
+    }
+
+    useMockLocation() {
+        // Fallback for testing/dev environments without GPS
+        this.currentPosition = { lat: 40.7128, lng: -74.0060 }; // NYC
+        alert("⚠️ USING MOCK LOCATION (New York)\n\nThis allows you to test the app logic without real GPS.");
+        this.updateUIWithLocation();
+        if (this.currentUser && this.currentUser.role === 'employee') {
+            this.monitorGeofence();
+        }
+        const statusEl = document.getElementById('auth-gps-status');
+        if (statusEl) statusEl.innerHTML = `<span style="color:var(--success)">✅ Mock Location Active</span>`;
     }
 
     monitorGeofence() {
@@ -349,17 +441,18 @@ class HRApp {
         const site = company.sites.find(s => s.id === user.assignedSiteId);
         if (!site) return;
 
-        const dist = this.getDistanceFromLatLonInMiters(
+        const dist = this.getDistanceFromLatLonInMeters(
             this.currentPosition.lat, this.currentPosition.lng,
             site.lat, site.lng
         );
 
-        // Auto Checkout if outside geofence
-        if (dist > this.MAX_DISTANCE_METERS + 20) { // +20m buffer
-            // Logic to warn or checkout
-            // For strict rule: Auto Checkout
-            this.checkOut('Auto Check-Out (Geofence)');
-            alert(`You left the worksite boundary (${Math.round(dist)}m).\nChecked out automatically.`);
+        // Auto Logout if outside geofence (Strict 100m)
+        if (dist > this.MAX_DISTANCE_METERS) {
+            // Warning and Auto-Checkout (Stop Timer), but DO NOT kick to login screen
+            alert(`⚠️ GEOCONFIG ALERT\n\nYou have left the worksite boundary (${Math.round(dist)}m).\n\nYour shift has been PAUSED (Auto Check-Out).`);
+            this.checkOut("Geofence Exit");
+            // LEAVE USER LOGGED IN so they can see what happened
+            // this.logout(); // REMOVED
         }
     }
 
@@ -402,9 +495,9 @@ class HRApp {
         // Update Login Screen Status
         const statusEl = document.getElementById('auth-gps-status');
         if (statusEl) {
-            statusEl.innerHTML = `<span style="color:#28a745;">✅ GPS Active</span> <span style="font-family:monospace; margin-left:8px;">${this.currentPosition.lat.toFixed(4)}...</span>`;
-            statusEl.style.background = "rgba(40, 167, 69, 0.1)"; // Green tint
-            statusEl.style.color = "#28a745";
+            statusEl.innerHTML = `<span class="t-success">✅ GPS Active</span> <span class="monospace-text">${this.currentPosition.lat.toFixed(4)}...</span>`;
+            statusEl.classList.remove('gps-status-warning');
+            statusEl.classList.add('gps-status-success');
         }
     }
 
@@ -414,6 +507,11 @@ class HRApp {
         const siteName = document.getElementById('new-site-name').value.trim();
         if (!siteName) return alert("Enter a Site Name");
         if (!this.currentPosition) return alert("Waiting for GPS signal...");
+
+        // Guard against Null Island (0,0) or invalid coords
+        if (Math.abs(this.currentPosition.lat) < 0.0001 && Math.abs(this.currentPosition.lng) < 0.0001) {
+            return alert("⚠️ GPS Error: Your location is reading as (0,0). Please wait for a better signal.");
+        }
 
         const company = this.mockDB.companies[this.currentUser.companyId];
 
@@ -434,14 +532,36 @@ class HRApp {
         document.getElementById('new-site-name').value = "";
     }
 
+    updateSiteLocation(siteId) {
+        if (!this.currentPosition) return alert("Waiting for GPS...");
+
+        // Guard against Null Island
+        if (Math.abs(this.currentPosition.lat) < 0.0001 && Math.abs(this.currentPosition.lng) < 0.0001) {
+            return alert("⚠️ GPS Error: Your location is reading as (0,0). Please wait for a better signal.");
+        }
+
+        const company = this.mockDB.companies[this.currentUser.companyId];
+        const site = company.sites.find(s => s.id === siteId);
+        if (!site) return;
+
+        if (!confirm(`Update location for "${site.name}" to your CURRENT position?\n\nNew Coords: ${this.currentPosition.lat.toFixed(6)}, ${this.currentPosition.lng.toFixed(6)}`)) return;
+
+        site.lat = this.currentPosition.lat;
+        site.lng = this.currentPosition.lng;
+        this.saveDB();
+        this.refreshDashboard();
+        alert(`Location for "${site.name}" updated!`);
+    }
+
     registerEmployee() {
         const username = document.getElementById('new-emp-username').value.trim().toLowerCase();
-        const email = document.getElementById('new-emp-email').value.trim();
+        const contact = document.getElementById('new-emp-contact').value.trim();
         const siteSelect = document.getElementById('new-emp-site');
         const siteId = siteSelect.value;
+        const passcode = document.getElementById('new-emp-passcode').value.trim(); // Optional
         const company = this.mockDB.companies[this.currentUser.companyId];
 
-        if (!username || !email || !siteId) return alert("Fill all fields");
+        if (!username || !contact || !siteId) return alert("Fill all fields");
 
         let user = this.mockDB.users[username];
 
@@ -450,7 +570,9 @@ class HRApp {
             user = {
                 role: 'employee',
                 companyId: this.currentUser.companyId,
-                email: email,
+                email: contact.includes('@') ? contact : null,
+                phone: !contact.includes('@') ? contact : null,
+                passcode: passcode || null,
                 assignedSiteId: siteId,
                 status: 'checked-out',
                 verified: true
@@ -461,7 +583,8 @@ class HRApp {
         else if (user.companyId === null) {
             user.companyId = this.currentUser.companyId;
             user.assignedSiteId = siteId;
-            user.email = email;
+            user.email = contact.includes('@') ? contact : null;
+            user.phone = !contact.includes('@') ? contact : null;
         }
         // Scenario 3: User belongs to another company
         else if (user.companyId !== this.currentUser.companyId) {
@@ -485,7 +608,7 @@ class HRApp {
         if (!company.employees.find(e => e.username === username)) {
             company.employees.push({
                 username,
-                email,
+                contact: contact,
                 assignedSiteId: siteId
             });
         }
@@ -496,7 +619,7 @@ class HRApp {
 
         // Clear inputs
         document.getElementById('new-emp-username').value = "";
-        document.getElementById('new-emp-email').value = "";
+        document.getElementById('new-emp-contact').value = "";
     }
 
     removeEmployee(username) {
@@ -529,7 +652,7 @@ class HRApp {
 
         if (!site) return alert("Error: Your assigned worksite was deleted or not found.");
 
-        const dist = this.getDistanceFromLatLonInMiters(
+        const dist = this.getDistanceFromLatLonInMeters(
             this.currentPosition.lat, this.currentPosition.lng,
             site.lat, site.lng
         );
@@ -543,10 +666,36 @@ class HRApp {
         user.checkInTime = Date.now();
         user.lastPing = Date.now();
 
+        // Start Tracking History
+        this.trackLocation(site.id); // Valid initial point
+        if (this.trackingInterval) clearInterval(this.trackingInterval);
+        this.trackingInterval = setInterval(() => {
+            this.trackLocation(site.id);
+        }, 300000); // Track every 5 minutes (300k ms)
+
         // Add log entry
         this.addLog(this.currentUser.companyId, this.currentUser.username, `Check-In @ ${site.name}`, new Date().toLocaleTimeString());
         this.saveDB();
         this.refreshDashboard();
+    }
+
+    trackLocation(siteId) {
+        if (!this.currentPosition || !this.currentUser) return;
+        const user = this.mockDB.users[this.currentUser.username];
+        if (!user) return;
+
+        if (!user.history) user.history = [];
+
+        user.history.push({
+            lat: this.currentPosition.lat,
+            lng: this.currentPosition.lng,
+            time: new Date().toLocaleString(),
+            siteId: siteId
+        });
+
+        // Limit history to last 50 points to save space
+        if (user.history.length > 50) user.history.shift();
+        this.saveDB();
     }
 
     checkOut(reason = "Check-Out") {
@@ -557,11 +706,30 @@ class HRApp {
         user.status = 'checked-out';
         user.checkInTime = null;
 
+        // Stop Tracking
+        if (this.trackingInterval) clearInterval(this.trackingInterval);
+
         // Add log entry
         this.addLog(this.currentUser.companyId, this.currentUser.username, reason, new Date().toLocaleTimeString());
 
         this.saveDB();
         this.refreshDashboard();
+    }
+
+    viewEmployeeHistory(username) {
+        const user = this.mockDB.users[username];
+        if (!user || !user.history || user.history.length === 0) {
+            return alert(`No history found for ${username}.`);
+        }
+
+        // Simple Alert View for now (or a modal if preferred)
+        let msg = `📜 Location History for ${username}:\n\n`;
+        user.history.slice().reverse().forEach(pt => {
+            msg += `• ${pt.time}: ${pt.lat.toFixed(5)}, ${pt.lng.toFixed(5)}\n`;
+        });
+
+        alert(msg);
+        // Ideally, we would switch to a dedicated view
     }
 
     addLog(companyId, username, action, time) {
@@ -582,7 +750,7 @@ class HRApp {
         if (!site) return;
 
         // 1. Distance Check
-        const dist = this.getDistanceFromLatLonInMiters(
+        const dist = this.getDistanceFromLatLonInMeters(
             this.currentPosition.lat, this.currentPosition.lng,
             site.lat, site.lng
         );
@@ -591,10 +759,10 @@ class HRApp {
         const distElem = document.getElementById('debug-distance');
         if (distElem) distElem.innerText = `Distance to ${site.name}: ${Math.round(dist)}m`;
 
-        if (dist > this.MAX_DISTANCE_METERS * 1.5) { // 1.5x buffer for drift
-            // Auto Checkout
-            this.checkOut(true);
-            alert(`Auto-checkout: You left the ${site.name} boundaries.`);
+        if (dist > this.MAX_DISTANCE_METERS) {
+            // Auto Logout
+            alert(`⚠️ Debug Auto-Logout: You left the ${site.name} boundaries.`);
+            this.logout();
         }
     }
 
@@ -628,8 +796,12 @@ class HRApp {
             if (siteListDiv) {
                 if (company.sites && company.sites.length > 0) {
                     siteListDiv.innerHTML = company.sites.map(s => `
-                        <div style="background:rgba(0,0,0,0.1); padding:8px; margin-top:4px; border-radius:4px; font-size:0.9rem;">
-                            📍 <strong>${s.name}</strong>
+                        <div class="site-item">
+                            <div>
+                                📍 <strong>${s.name}</strong>
+                                <div class="text-small text-muted" style="margin-top:4px;">${s.lat.toFixed(6)}, ${s.lng.toFixed(6)}</div>
+                            </div>
+                            <button class="btn-outline text-small" onclick="app.updateSiteLocation('${s.id}')">Update Loc</button>
                         </div>
                      `).join('');
                 } else {
@@ -646,8 +818,8 @@ class HRApp {
                     const siteEmployees = company.employees.filter(emp => emp.assignedSiteId === site.id);
 
                     if (siteEmployees.length > 0) {
-                        html += `<div style="margin-bottom:16px;">
-                            <h3 style="font-size:1rem; color:var(--accent-yellow); border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:4px; margin-bottom:8px;">
+                        html += `<div class="site-status-group">
+                            <h3 class="site-header">
                                 📍 ${site.name}
                             </h3>`;
 
@@ -657,12 +829,12 @@ class HRApp {
                             const isActive = realUser && realUser.status === 'checked-in';
 
                             html += `
-                                <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; margin-bottom:6px;">
+                                <div class="team-member-item">
                                     <div>
-                                        <span style="font-weight:600; font-size:1rem;">${emp.username}</span>
-                                        <div style="font-size:0.8rem; color:var(--text-muted);">${isActive ? 'Active on site' : 'Not at site'}</div>
+                                        <span class="team-member-name">${emp.username}</span>
+                                        <div class="text-sub">${isActive ? 'Active on site' : 'Not at site'}</div>
                                     </div>
-                                    <div style="font-size:1.5rem;">
+                                    <div class="team-member-status-icon">
                                         ${isActive ? '🟢' : '🔴'}
                                     </div>
                                 </div>
@@ -673,13 +845,13 @@ class HRApp {
                 });
 
                 if (html === '') {
-                    html = '<p class="text-muted" style="text-align:center;">No employees assigned to sites yet.</p>';
+                    html = '<p class="text-muted text-center">No employees assigned to sites yet.</p>';
                 }
 
                 teamStatusDiv.innerHTML = html;
             }
 
-            // 3. Render Logs
+            // 4. Render Logs
             const logList = document.getElementById('employee-list');
             if (company.logs && company.logs.length > 0) {
                 let html = '<table class="logs-table"><tr><th>User</th><th>Action</th><th>Time</th></tr>';
@@ -689,27 +861,30 @@ class HRApp {
                 html += '</table>';
                 logList.innerHTML = html;
             } else {
-                logList.innerHTML = '<p style="color: var(--text-muted); font-size: 0.9rem;">No entries yet.</p>';
+                logList.innerHTML = '<p class="text-muted text-small">No entries yet.</p>';
             }
 
-            // 4. Render Team Management List
+            // 5. Render Team Management List
             const teamList = document.getElementById('team-list-container');
             if (teamList) {
                 if (company.employees && company.employees.length > 0) {
                     teamList.innerHTML = company.employees.map(emp => {
                         const siteName = company.sites.find(s => s.id === emp.assignedSiteId)?.name || 'Unknown Site';
                         return `
-                        <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.2); padding:12px; margin-bottom:8px; border-radius:8px; border:1px solid var(--border-color);">
+                        <div class="team-member-item">
                             <div>
-                                <div style="font-weight:bold; font-size:1rem;">${emp.username}</div>
-                                <div style="font-size:0.8rem; color:var(--text-muted);">@ ${siteName}</div>
+                                <div class="team-member-name">${emp.username}</div>
+                                <div class="text-sub">@ ${siteName}</div>
                             </div>
-                            <button onclick="app.removeEmployee('${emp.username}')" style="background:var(--danger); border:none; color:white; padding:8px 12px; border-radius:6px; cursor:pointer;">🗑️</button>
+                            <div>
+                                <button onclick="app.viewEmployeeHistory('${emp.username}')" class="btn-outline text-small" style="margin-right:4px;">📜</button>
+                                <button onclick="app.removeEmployee('${emp.username}')" class="btn-danger">🗑️</button>
+                            </div>
                         </div>
                         `;
                     }).join('');
                 } else {
-                    teamList.innerHTML = '<p style="text-align:center; color: var(--text-muted);">No employees yet.</p>';
+                    teamList.innerHTML = '<p class="text-muted text-center">No employees yet.</p>';
                 }
             }
 
@@ -771,7 +946,7 @@ class HRApp {
     }
 
     // --- Utils ---
-    getDistanceFromLatLonInMiters(lat1, lon1, lat2, lon2) {
+    getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
         var R = 6371; // Radius of the earth in km
         var dLat = this.deg2rad(lat2 - lat1);  // deg2rad below
         var dLon = this.deg2rad(lon2 - lon1);

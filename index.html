@@ -74,7 +74,7 @@
                     <small id="verify-hint">(Check console or alert for code)</small>
                 </p>
                 <div class="form-group">
-                    <input type="text" id="verify-code" placeholder="Enter Code (e.g. 1234)"
+                    <input type="text" id="verify-code" name="verify-code" placeholder="Enter Code (e.g. 1234)"
                         style="text-align: center; letter-spacing: 4px; font-size: 1.2rem;">
                 </div>
                 <button class="btn btn-primary" onclick="app.verifyAccount()">Verify Account</button>
@@ -198,8 +198,8 @@
 
             <div class="debug-controls">
                 <div class="debug-title">🚧 Dev Tools</div>
-                <button class="btn btn-outline" style="font-size: 0.8rem; padding: 8px;"
-                    onclick="app.debugSetLocation(app.currentPosition.lat + 0.005, app.currentPosition.lng)">
+                    <button class="btn btn-outline" style="font-size: 0.8rem; padding: 8px;"
+                        onclick="if (window.app && app.currentPosition) { app.debugSetLocation(app.currentPosition.lat + 0.005, app.currentPosition.lng); } else { alert('Current position not available'); }">
                     🚀 Teleport Away (Test Auto-Checkout)
                 </button>
             </div>
@@ -231,8 +231,8 @@
 
                 <div class="debug-controls" style="margin-top: 24px;">
                     <div class="debug-title">🚧 Dev Tools</div>
-                    <button class="btn btn-outline" style="font-size: 0.8rem; padding: 8px;"
-                        onclick="app.debugSetLocation(app.currentPosition.lat + 0.005, app.currentPosition.lng)">
+                        <button class="btn btn-outline" style="font-size: 0.8rem; padding: 8px;"
+                            onclick="if (window.app && app.currentPosition) { app.debugSetLocation(app.currentPosition.lat + 0.005, app.currentPosition.lng); } else { alert('Current position not available'); }">
                         🚀 Teleport Away (Test Auto-Checkout)
                     </button>
                 </div>

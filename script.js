@@ -441,6 +441,8 @@ class HRApp {
         const site = company.sites.find(s => s.id === user.assignedSiteId);
         if (!site) return;
 
+        if (!this.currentPosition) return; // Safety: require position to compute distance
+
         const dist = this.getDistanceFromLatLonInMeters(
             this.currentPosition.lat, this.currentPosition.lng,
             site.lat, site.lng
@@ -456,29 +458,16 @@ class HRApp {
         }
     }
 
-    // Helper
-    getDistanceFromLatLonInMiters(lat1, lon1, lat2, lon2) {
-        var R = 6371; // Radius of the earth in km
-        var dLat = this.deg2rad(lat2 - lat1);
-        var dLon = this.deg2rad(lon2 - lon1);
-        var a =
-            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(this.deg2rad(lat1)) * Math.cos(this.deg2rad(lat2)) *
-            Math.sin(dLon / 2) * Math.sin(dLon / 2);
-        var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        var d = R * c; // Distance in km
-        return d * 1000; // in meters
-    }
-
-    deg2rad(deg) {
-        return deg * (Math.PI / 180)
-    }
-
     // --- View Management ---
 
     showView(viewId) {
         document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
-        document.getElementById(viewId).classList.add('active');
+        const el = document.getElementById(viewId);
+        if (!el) {
+            console.warn('showView: element not found', viewId);
+            return;
+        }
+        el.classList.add('active');
     }
 
     updateUIWithLocation() {
@@ -749,6 +738,8 @@ class HRApp {
         const site = company.sites.find(s => s.id === user.assignedSiteId);
         if (!site) return;
 
+        if (!this.currentPosition) return; // Safety: require position to compute distance
+
         // 1. Distance Check
         const dist = this.getDistanceFromLatLonInMeters(
             this.currentPosition.lat, this.currentPosition.lng,
@@ -967,11 +958,6 @@ class HRApp {
 
 // Initialize with Error Handling
 try {
-    window.onerror = function (msg, url, line, col, error) {
-        alert("⚠️ CRITICAL ERROR:\n" + msg + "\nLine: " + line);
-        return false;
-    };
-
     const app = new HRApp();
     window.app = app; // Expose for HTML onclick handlers
     console.log("App Initialized Successfully");

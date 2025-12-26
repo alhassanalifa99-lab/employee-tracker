@@ -66,6 +66,32 @@ class HRApp {
         } else {
             this.showView('view-auth'); // Default to Auth
         }
+
+        // Listen for storage changes (other tabs or background updates)
+        window.addEventListener('storage', (e) => {
+            try {
+                if (e.key === 'hrapp_db') {
+                    const newDB = JSON.parse(e.newValue);
+                    if (newDB) {
+                        this.mockDB = newDB;
+                        console.log('hrapp_db updated from another context. Syncing...');
+                        this.refreshDashboard();
+                        this.showToast('Database updated from another tab', 'info');
+                    }
+                }
+                if (e.key === 'hrapp_user') {
+                    const newUser = JSON.parse(e.newValue);
+                    if (newUser) {
+                        this.currentUser = newUser;
+                        console.log('hrapp_user updated from another context. Syncing user session...');
+                        this.refreshDashboard();
+                        this.showToast('User session changed in another tab', 'info');
+                    }
+                }
+            } catch (err) {
+                console.warn('Error handling storage event', err);
+            }
+        });
     }
 
     migrateData() {
@@ -934,6 +960,43 @@ class HRApp {
         this.updateUIWithLocation();
         this.checkGeofence();
         alert(`Debug: Teleported to ${lat}, ${lng}`);
+    }
+
+    // Debug: Dump DB to console/alert for troubleshooting
+    debugDumpDB() {
+        try {
+            const raw = localStorage.getItem('hrapp_db');
+            console.log('hrapp_db (localStorage):', raw);
+            console.log('mockDB (in-memory):', this.mockDB);
+            alert('DB dumped to console. Open DevTools -> Console to inspect.');
+        } catch (err) {
+            alert('Failed to read DB: ' + err.message);
+        }
+    }
+
+    // In-app toast notification
+    showToast(message, type = 'info', duration = 4000) {
+        try {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+
+            const node = document.createElement('div');
+            node.className = `toast ${type}`;
+            node.innerText = message;
+
+            container.appendChild(node);
+
+            // Auto remove
+            setTimeout(() => {
+                try {
+                    node.style.opacity = '0';
+                    node.style.transform = 'translateY(-6px)';
+                    setTimeout(() => { if (node.parentNode) node.parentNode.removeChild(node); }, 260);
+                } catch (e) { /* ignore */ }
+            }, duration);
+        } catch (err) {
+            console.warn('Toast failed', err);
+        }
     }
 
     // --- Utils ---

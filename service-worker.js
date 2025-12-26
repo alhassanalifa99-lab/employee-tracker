@@ -7,18 +7,34 @@ const ASSETS = [
     './manifest.json'
 ];
 
-// Install Event
+// Install Event - cache core assets
 self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(CACHE_NAME)
             .then((cache) => cache.addAll(ASSETS))
+            .then(() => self.skipWaiting())
     );
 });
 
-// Fetch Event
+// Activate Event - take control of clients immediately
+self.addEventListener('activate', (event) => {
+    event.waitUntil(self.clients.claim());
+});
+
+// Fetch Event - network-first, fallback to cache
 self.addEventListener('fetch', (event) => {
+    // Only handle GET requests
+    if (event.request.method !== 'GET') return;
+
     event.respondWith(
-        caches.match(event.request)
-            .then((response) => response || fetch(event.request))
+        fetch(event.request)
+            .then((networkResponse) => {
+                // Update cache in background
+                caches.open(CACHE_NAME).then(cache => {
+                    try { cache.put(event.request, networkResponse.clone()); } catch (e) { /* ignore */ }
+                });
+                return networkResponse;
+            })
+            .catch(() => caches.match(event.request).then((cached) => cached))
     );
 });

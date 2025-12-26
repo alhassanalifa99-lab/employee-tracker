@@ -1,27 +1,24 @@
 :root {
-    /* --- PREMIUM THEME: Glassmorphism & Deep Blue --- */
+    /* --- Dark Comfortable Theme --- */
 
-    /* Backgrounds: Deep Gradient */
-    --bg-dark: #0f172a;
-    --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+    /* Backgrounds: Deep comfortable navy */
+    --bg-dark: #061126;
+    --bg-gradient: linear-gradient(135deg, #061126 0%, #0b1a2b 100%);
 
-    /* Glassmorphism Cards */
-    --card-bg: rgba(30, 41, 59, 0.7);
-    /* Translucent */
-    --card-border: rgba(255, 255, 255, 0.1);
-    --card-blur: 12px;
+    /* Cards and surfaces */
+    --card-bg: rgba(10, 18, 30, 0.82);
+    --card-border: rgba(255, 255, 255, 0.04);
+    --card-blur: 10px;
 
-    /* Primary Colors */
-    --primary: #3b82f6;
-    /* Electric Blue */
-    --primary-gradient: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-    --primary-glow: rgba(59, 130, 246, 0.5);
+    /* Primary Colors: darker, desaturated indigo for comfort */
+    --primary: #1e3a8a;
+    --primary-gradient: linear-gradient(135deg, #1e3a8a 0%, #122a5a 100%);
+    --primary-glow: rgba(30, 58, 138, 0.22);
 
     /* Accents */
     --accent-gold: #f59e0b;
-    /* Gold for status/highlights */
-    --text-main: #f8fafc;
-    --text-muted: #94a3b8;
+    --text-main: #e6eef8;
+    --text-muted: #9fb0c8;
 
     /* Functional Colors */
     --danger: #ef4444;
@@ -30,16 +27,13 @@
     --success-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
 
     /* Spacing & Radius */
-    /* Glassmorphism removed as per user request - finding solid alternatives */
-    /* --glass-bg: rgba(30, 41, 59, 0.7); from previous */
-    --glass-bg: rgba(30, 41, 59, 0.95);
-    /* More solid */
-    --glass-border: rgba(255, 255, 255, 0.1);
-    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    --glass-bg: rgba(10, 18, 30, 0.95);
+    --glass-border: rgba(255, 255, 255, 0.04);
+    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.35);
     --radius-sm: 8px;
     --radius-md: 16px;
     --radius-lg: 24px;
-    --shadow-soft: 0 8px 32px rgba(0, 0, 0, 0.3);
+    --shadow-soft: 0 8px 32px rgba(0, 0, 0, 0.36);
 }
 
 * {
@@ -53,8 +47,8 @@
 body {
     background-color: var(--bg-dark);
     background-image:
-        radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.15) 0px, transparent 50%),
-        radial-gradient(at 100% 0%, rgba(148, 163, 184, 0.1) 0px, transparent 50%);
+        radial-gradient(at 0% 0%, rgba(30, 58, 138, 0.06) 0px, transparent 50%),
+        radial-gradient(at 100% 0%, rgba(148, 163, 184, 0.06) 0px, transparent 50%);
     background-attachment: fixed;
     color: var(--text-light);
     font-family: 'Inter', 'Segoe UI', sans-serif;
@@ -208,7 +202,7 @@ select:focus {
     outline: none;
     border-color: var(--primary);
     background: rgba(0, 0, 0, 0.4);
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+    box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.12);
 }
 
 /* --- Buttons --- */
@@ -231,12 +225,12 @@ select:focus {
 .btn-primary {
     background: var(--primary-gradient);
     color: white;
-    box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 15px var(--primary-glow);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.24);
 }
 
 .btn-primary:hover {
-    box-shadow: 0 6px 20px rgba(37, 99, 235, 0.6);
+    box-shadow: 0 6px 20px rgba(30, 58, 138, 0.38);
 }
 
 .btn-outline {

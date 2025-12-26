@@ -663,7 +663,7 @@ class HRApp {
         const company = this.mockDB.companies[this.currentUser.companyId];
 
         // Find assigned site
-        const site = company.sites.find(s => s.id === user.assignedSiteId);
+        const site = company?.sites.find(s => s.id === user.assignedSiteId);
 
         if (!site) return alert("Error: Your assigned worksite was deleted or not found.");
 

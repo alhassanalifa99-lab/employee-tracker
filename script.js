@@ -36,7 +36,7 @@ class HRApp {
         this.watchId = null;
 
         // Constants
-        this.MAX_DISTANCE_METERS = 100; // Geofence radius
+        this.MAX_DISTANCE_METERS = 50; // Geofence radius
 
         // Wrap init in try-catch just in case
         try {

@@ -356,10 +356,12 @@ class HRApp {
             // Generate Company ID
             const companyId = (companyName.substring(0, 4) + Math.floor(1000 + Math.random() * 9000)).toUpperCase();
 
-            // Send OTP via Supabase Auth - signUp will trigger OTP email
-            const { data, error } = await supabase.auth.signUp({
+            // Send 6-digit OTP via Supabase Auth
+            const { data, error } = await supabase.auth.signInWithOtp({
                 email: managerEmail,
-                password: Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15) // Temporary password
+                options: {
+                    shouldCreateUser: true
+                }
             });
 
             if (error) {
@@ -412,10 +414,12 @@ class HRApp {
         }
 
         try {
-            // Send OTP via Supabase Auth - signUp will trigger OTP email
-            const { data, error } = await supabase.auth.signUp({
+            // Send 6-digit OTP via Supabase Auth
+            const { data, error } = await supabase.auth.signInWithOtp({
                 email: email,
-                password: Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15) // Temporary password
+                options: {
+                    shouldCreateUser: true
+                }
             });
 
             if (error) {

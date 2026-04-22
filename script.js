@@ -356,12 +356,10 @@ class HRApp {
             // Generate Company ID
             const companyId = (companyName.substring(0, 4) + Math.floor(1000 + Math.random() * 9000)).toUpperCase();
 
-            // Send OTP via Supabase Auth
-            const { data, error } = await supabase.auth.signInWithOtp({
+            // Send OTP via Supabase Auth - signUp will trigger OTP email
+            const { data, error } = await supabase.auth.signUp({
                 email: managerEmail,
-                options: {
-                    shouldCreateUser: false // Don't auto-create user yet
-                }
+                password: Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15) // Temporary password
             });
 
             if (error) {
@@ -414,12 +412,10 @@ class HRApp {
         }
 
         try {
-            // Send OTP via Supabase Auth
-            const { data, error } = await supabase.auth.signInWithOtp({
+            // Send OTP via Supabase Auth - signUp will trigger OTP email
+            const { data, error } = await supabase.auth.signUp({
                 email: email,
-                options: {
-                    shouldCreateUser: false // Don't auto-create user yet
-                }
+                password: Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15) // Temporary password
             });
 
             if (error) {
@@ -463,7 +459,7 @@ class HRApp {
         }
 
         try {
-            // Verify OTP with Supabase Auth
+            // Verify OTP with Supabase Auth - this confirms the email
             const { data, error } = await supabase.auth.verifyOtp({
                 email: this.pendingRegistration.email,
                 token: codeInput,
@@ -474,13 +470,19 @@ class HRApp {
                 throw error;
             }
 
+            // Sign out from the temporary auth session (we'll handle auth differently)
+            await supabase.auth.signOut();
+
             // OTP verified successfully! Now create the account
             if (this.pendingRegistration.type === 'manager') {
                 // Create manager account
                 await this.saveManager(this.pendingRegistration.username, this.pendingRegistration.managerData);
                 
-                alert("✅ Email Verified Successfully!");
-                alert(`🎉 Company "${this.pendingRegistration.companyName}" Created!\n\nCompany ID: ${this.pendingRegistration.companyId}\n\nPlease login with your credentials.`);
+                // Show prominent Company ID notification
+                this.showToast(`✅ Email Verified! Company Created.`, 'success', 3000);
+                this.showToast(`📋 Company ID: ${this.pendingRegistration.companyId}`, 'info', 8000);
+                
+                alert(`✅ Email Verified Successfully!\n\n🎉 Company "${this.pendingRegistration.companyName}" Created!\n\n📌 YOUR COMPANY ID:\n${this.pendingRegistration.companyId}\n\nSave this ID - you'll need it to login.\n\nUsername: ${this.pendingRegistration.username}`);
                 
                 // Pre-fill login form
                 document.getElementById('auth-username').value = this.pendingRegistration.username;

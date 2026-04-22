@@ -2,6 +2,7 @@ import { supabase } from './supabase.js';
 /**
  * The HR app
  * Core Logic - Handles State, Geolocation, and UI Updates.
+ * Migrated to Supabase for data persistence
  */
 
 // Global Error Handler (Must be first)
@@ -12,118 +13,316 @@ window.onerror = function (msg, url, line, col, error) {
 
 class HRApp {
     constructor() {
-        // Initialize Default DB structure if new or empty
-        const defaultDB = {
-            companies: {
-                // Default Demo Company for easy testing
-                "DEMO": {
-                    sites: [
-                        { id: 'site_1', name: "Main HQ", lat: 31.9686, lng: 99.9018 } // Placeholder
-                    ],
-                    employees: [],
-                    logs: []
-                }
-            },
-            users: {
-                "manager": { role: 'manager', companyId: 'DEMO', password: '123' },
-                // Employees will be added here dynamically
-            }
-        };
-
-        this.mockDB = JSON.parse(localStorage.getItem('hrapp_db')) || defaultDB;
-
         this.currentUser = null;
         this.currentPosition = null;
         this.watchId = null;
 
+        // OTP verification state
+        this.pendingUser = null;
+        this.pendingRegistration = null; // Store: { email, username, type: 'manager'|'employee', managerData }
+
         // Constants
         this.MAX_DISTANCE_METERS = 50; // Geofence radius
 
+        // In-memory cache of managers and employees
+        this.managers = {};
+        this.employees = {};
+        this.sites = {};
+        this.companies = {};
+        this.logs = {};
+
         // Wrap init in try-catch just in case
         try {
-            this.init();
+            this.initAsync();
         } catch (e) {
             alert("Init Error: " + e.message);
         }
     }
 
-    init() {
-        this.migrateData(); // Fix legacy data
+    async initAsync() {
+        try {
+            // Start GPS immediately (for Login Screen status)
+            this.watchLocation();
 
-        // Start GPS immediately (for Login Screen status)
-        this.watchLocation();
+            // Load initial data from Supabase
+            await this.loadAllData();
 
-        // Restore session if exists
-        const storedUser = localStorage.getItem('hrapp_user');
-        if (storedUser) {
-            this.currentUser = JSON.parse(storedUser);
-            // Verify user still exists in DB
-            if (this.mockDB.users[this.currentUser.username]) {
-                this.showView(this.currentUser.role === 'manager' ? 'view-manager' : 'view-employee');
-                this.refreshDashboard();
+            // Restore session if exists from localStorage
+            const storedUser = localStorage.getItem('hrapp_user');
+            if (storedUser) {
+                this.currentUser = JSON.parse(storedUser);
+                // Verify user still exists in Supabase
+                const user = this.managers[this.currentUser.username] || this.employees[this.currentUser.username];
+                if (user) {
+                    this.showView(this.currentUser.role === 'manager' ? 'view-manager' : 'view-employee');
+                    this.refreshDashboard();
+                } else {
+                    this.logout(); // Invalid session
+                }
             } else {
-                this.logout(); // Invalid session
+                this.showView('view-auth'); // Default to Auth
             }
-        } else {
-            this.showView('view-auth'); // Default to Auth
+        } catch (error) {
+            console.error('Error in initAsync:', error);
+            alert('Initialization error: ' + error.message);
         }
+    }
 
-        // Listen for storage changes (other tabs or background updates)
-        window.addEventListener('storage', (e) => {
+    // Load all data from Supabase into memory cache
+    async loadAllData() {
+        try {
+            // Load managers
+            const { data: managersData, error: managersError } = await supabase
+                .from('managers')
+                .select('*');
+            if (managersError) throw managersError;
+            managersData?.forEach(m => {
+                this.managers[m.username] = m;
+                if (!this.companies[m.company_id]) {
+                    this.companies[m.company_id] = { sites: [], employees: [], logs: [] };
+                }
+            });
+
+            // Load employees
+            const { data: employeesData, error: employeesError } = await supabase
+                .from('employees')
+                .select('*');
+            if (employeesError) throw employeesError;
+            employeesData?.forEach(e => {
+                this.employees[e.username] = e;
+                if (e.company_id && !this.companies[e.company_id]) {
+                    this.companies[e.company_id] = { sites: [], employees: [], logs: [] };
+                }
+                if (e.company_id && !this.companies[e.company_id].employees.includes(e.username)) {
+                    this.companies[e.company_id].employees.push(e.username);
+                }
+            });
+
+            // Load sites
+            const { data: sitesData, error: sitesError } = await supabase
+                .from('sites')
+                .select('*');
+            if (sitesError) throw sitesError;
+            sitesData?.forEach(s => {
+                this.sites[s.id] = s;
+                if (s.company_id && this.companies[s.company_id]) {
+                    if (!this.companies[s.company_id].sites.find(site => site.id === s.id)) {
+                        this.companies[s.company_id].sites.push(s);
+                    }
+                }
+            });
+
+            // Load checkins/logs
+            const { data: checkinsData, error: checkinsError } = await supabase
+                .from('checkins')
+                .select('*')
+                .order('created_at', { ascending: false });
+            if (checkinsError) throw checkinsError;
+            checkinsData?.forEach(c => {
+                if (!this.logs[c.company_id]) this.logs[c.company_id] = [];
+                this.logs[c.company_id].push(c);
+            });
+
+            console.log('✅ Data loaded from Supabase');
+        } catch (error) {
+            console.error('Error loading data from Supabase, attempting localStorage fallback:', error);
+            
+            // Fallback to localStorage snapshot
             try {
-                if (e.key === 'hrapp_db') {
-                    const newDB = JSON.parse(e.newValue);
-                    if (newDB) {
-                        this.mockDB = newDB;
-                        console.log('hrapp_db updated from another context. Syncing...');
-                        this.refreshDashboard();
-                        this.showToast('Database updated from another tab', 'info');
-                    }
+                const snapshot = localStorage.getItem('hrapp_db_snapshot');
+                if (snapshot) {
+                    const data = JSON.parse(snapshot);
+                    this.managers = data.managers || {};
+                    this.employees = data.employees || {};
+                    this.sites = data.sites || {};
+                    this.logs = data.logs || {};
+                    console.log('✅ Loaded from localStorage backup');
+                    this.showToast('Using offline cache - some data may be outdated', 'warning');
+                    return;
                 }
-                if (e.key === 'hrapp_user') {
-                    const newUser = JSON.parse(e.newValue);
-                    if (newUser) {
-                        this.currentUser = newUser;
-                        console.log('hrapp_user updated from another context. Syncing user session...');
-                        this.refreshDashboard();
-                        this.showToast('User session changed in another tab', 'info');
-                    }
-                }
-            } catch (err) {
-                console.warn('Error handling storage event', err);
+            } catch (storageError) {
+                console.error('Failed to load localStorage backup:', storageError);
             }
-        });
-    }
-
-    migrateData() {
-        // 1. Lowercase Usernames
-        let changed = false;
-        const newUsers = {};
-        Object.keys(this.mockDB.users).forEach(key => {
-            const lowerKey = key.toLowerCase();
-            if (key !== lowerKey) {
-                // Move data to lowercase key
-                newUsers[lowerKey] = this.mockDB.users[key];
-                changed = true;
-            } else {
-                newUsers[key] = this.mockDB.users[key];
-            }
-            // Ensure verify flag exists (Migration for older users)
-            if (typeof newUsers[lowerKey].verified === 'undefined') {
-                newUsers[lowerKey].verified = true; // Legacy users auto-verify
-                changed = true;
-            }
-        });
-        this.mockDB.users = newUsers;
-
-        if (changed) {
-            console.log("Database Migrated: Usernames normalized & Legacy users verified.");
-            this.saveDB();
+            
+            alert('Warning: Could not load data from database: ' + error.message);
         }
     }
 
-    saveDB() {
-        localStorage.setItem('hrapp_db', JSON.stringify(this.mockDB));
+    // Helper: Get user object (manager or employee)
+    getUserByUsername(username) {
+        return this.managers[username] || this.employees[username];
+    }
+
+    // Helper: Build company object from cached data
+    getCompanyData(companyId) {
+        const company = this.companies[companyId] || { sites: [], employees: [], logs: [] };
+        company.sites = Object.values(this.sites).filter(s => s.company_id === companyId);
+        company.employees = (this.companies[companyId]?.employees || []).map(username => {
+            const emp = this.employees[username];
+            return emp ? { username: emp.username, contact: emp.email || emp.phone, assignedSiteId: emp.assigned_site_id } : null;
+        }).filter(e => e);
+        company.logs = (this.logs[companyId] || []).slice(0, 20).map(log => ({
+            username: log.username,
+            action: log.action,
+            time: log.time
+        }));
+        return company;
+    }
+
+    // Save manager to Supabase
+    async saveManager(username, managerData) {
+        try {
+            const { error } = await supabase
+                .from('managers')
+                .upsert({ 
+                    username, 
+                    ...managerData,
+                    updated_at: new Date().toISOString()
+                }, { 
+                    onConflict: 'username' 
+                });
+            if (error) throw error;
+            this.managers[username] = { username, ...managerData };
+        } catch (error) {
+            console.error('Error saving manager:', error);
+            throw error;
+        }
+    }
+
+    // Save employee to Supabase
+    async saveEmployee(username, employeeData) {
+        try {
+            const { error } = await supabase
+                .from('employees')
+                .upsert({ 
+                    username, 
+                    ...employeeData,
+                    updated_at: new Date().toISOString()
+                }, { 
+                    onConflict: 'username' 
+                });
+            if (error) throw error;
+            this.employees[username] = { username, ...employeeData };
+        } catch (error) {
+            console.error('Error saving employee:', error);
+            throw error;
+        }
+    }
+
+    // Save site to Supabase
+    async saveSite(siteData) {
+        try {
+            const { data, error } = await supabase
+                .from('sites')
+                .upsert({ 
+                    ...siteData,
+                    updated_at: new Date().toISOString()
+                }, { 
+                    onConflict: 'id' 
+                });
+            if (error) throw error;
+            this.sites[siteData.id] = siteData;
+        } catch (error) {
+            console.error('Error saving site:', error);
+            throw error;
+        }
+    }
+
+    // Save checkin/log to Supabase
+    async saveCheckin(checkinData) {
+        try {
+            const { error } = await supabase
+                .from('checkins')
+                .insert({ 
+                    ...checkinData,
+                    created_at: new Date().toISOString()
+                });
+            if (error) throw error;
+            if (!this.logs[checkinData.company_id]) {
+                this.logs[checkinData.company_id] = [];
+            }
+            this.logs[checkinData.company_id].unshift(checkinData);
+        } catch (error) {
+            console.error('Error saving checkin:', error);
+            throw error;
+        }
+    }
+
+    // Delete manager from Supabase
+    async deleteManager(username) {
+        try {
+            const { error } = await supabase
+                .from('managers')
+                .delete()
+                .eq('username', username);
+            if (error) throw error;
+            delete this.managers[username];
+        } catch (error) {
+            console.error('Error deleting manager:', error);
+            throw error;
+        }
+    }
+
+    // Delete employee from Supabase
+    async deleteEmployee(username) {
+        try {
+            const { error } = await supabase
+                .from('employees')
+                .delete()
+                .eq('username', username);
+            if (error) throw error;
+            delete this.employees[username];
+        } catch (error) {
+            console.error('Error deleting employee:', error);
+            throw error;
+        }
+    }
+
+    // Bulk save all in-memory data to Supabase (with fallback to localStorage)
+    async saveDB() {
+        try {
+            // Save all managers
+            for (const [username, manager] of Object.entries(this.managers)) {
+                const { error } = await supabase
+                    .from('managers')
+                    .upsert({ username, ...manager, updated_at: new Date().toISOString() }, { onConflict: 'username' });
+                if (error) throw error;
+            }
+
+            // Save all employees
+            for (const [username, employee] of Object.entries(this.employees)) {
+                const { error } = await supabase
+                    .from('employees')
+                    .upsert({ username, ...employee, updated_at: new Date().toISOString() }, { onConflict: 'username' });
+                if (error) throw error;
+            }
+
+            // Save all sites
+            for (const [siteId, site] of Object.entries(this.sites)) {
+                const { error } = await supabase
+                    .from('sites')
+                    .upsert({ ...site, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+                if (error) throw error;
+            }
+
+            console.log('✅ All data synced to Supabase');
+        } catch (error) {
+            console.error('Error syncing to Supabase, falling back to localStorage:', error);
+            // Fallback: Create a snapshot in localStorage for offline recovery
+            try {
+                const dbSnapshot = {
+                    managers: this.managers,
+                    employees: this.employees,
+                    sites: this.sites,
+                    logs: this.logs,
+                    timestamp: new Date().toISOString()
+                };
+                localStorage.setItem('hrapp_db_snapshot', JSON.stringify(dbSnapshot));
+                console.log('💾 Backed up to localStorage');
+            } catch (storageError) {
+                console.error('Failed to backup to localStorage:', storageError);
+            }
+        }
     }
 
     setupLocationWatcher() {
@@ -133,116 +332,180 @@ class HRApp {
 
     // --- Authentication ---
 
-    registerNewCompany() {
+    async registerNewCompany() {
         const companyName = document.getElementById('reg-company-name').value.trim();
         const managerName = document.getElementById('reg-manager-name').value.trim().toLowerCase();
+        const managerEmail = document.getElementById('reg-manager-email').value.trim();
 
-        if (!companyName || !managerName) return alert("Please fill all fields");
-        if (this.mockDB.users[managerName]) return alert("Username already taken! Choose another manager username.");
+        if (!companyName || !managerName || !managerEmail) {
+            return alert("Please fill all fields (Company Name, Manager Username, and Email)");
+        }
+        
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(managerEmail)) {
+            return alert("Please enter a valid email address");
+        }
+        
+        // Check if manager already exists
+        if (this.managers[managerName]) {
+            return alert("Username already taken! Choose another manager username.");
+        }
 
-        // Generate ID
-        const companyId = (companyName.substring(0, 4) + Math.floor(1000 + Math.random() * 9000)).toUpperCase();
+        try {
+            // Generate Company ID
+            const companyId = (companyName.substring(0, 4) + Math.floor(1000 + Math.random() * 9000)).toUpperCase();
 
-        // 1. Create Company
-        this.mockDB.companies[companyId] = {
-            name: companyName,
-            sites: [],
-            employees: [],
-            logs: []
-        };
+            // Send OTP via Supabase Auth
+            const { data, error } = await supabase.auth.signInWithOtp({
+                email: managerEmail,
+                options: {
+                    shouldCreateUser: false // Don't auto-create user yet
+                }
+            });
 
-        // 2. Create Manager - UNVERIFIED INITIALLY
-        this.mockDB.users[managerName] = {
-            role: 'manager',
-            companyId: companyId,
-            verified: false,
-            verifyCode: Math.floor(1000 + Math.random() * 9000).toString(),
-            history: [] // Init History
-        };
+            if (error) {
+                throw error;
+            }
 
-        // SIMULATE SENDING CODE
-        alert(`📨 SIMULATION: Manager Verification Code: ${this.mockDB.users[managerName].verifyCode}`);
+            // Store pending registration data
+            this.pendingRegistration = {
+                email: managerEmail,
+                username: managerName,
+                type: 'manager',
+                companyId: companyId,
+                companyName: companyName,
+                managerData: {
+                    company_id: companyId,
+                    role: 'manager',
+                    verified: false
+                }
+            };
 
-        this.saveDB();
-
-        alert(`🎉 Company Created. Please Login to Verify your Email.`);
-        document.getElementById('auth-username').value = managerName;
-        document.getElementById('auth-company').value = companyId;
-        this.showView('view-auth');
+            this.showToast(`✉️ OTP sent to ${managerEmail}. Check your inbox!`, 'success');
+            this.showView('view-verify');
+        } catch (error) {
+            console.error('Error sending OTP:', error);
+            alert('Failed to send verification code: ' + error.message);
+        }
     }
 
-    registerNewEmployeeUser() {
+    async registerNewEmployeeUser() {
         const username = document.getElementById('reg-emp-username-self').value.trim().toLowerCase();
         const email = document.getElementById('reg-emp-email-self').value.trim();
         const phone = document.getElementById('reg-emp-phone-self').value.trim();
         const passcode = document.getElementById('reg-emp-passcode-self').value.trim();
 
         if (!username) return alert("Please enter a username.");
-        if (!email && !phone) return alert("Please provide either Email OR Phone number.");
-        if (this.mockDB.users[username]) return alert("Username already taken!");
+        
+        // Email is now required for OTP verification
+        if (!email) {
+            return alert("Email is required for verification. Please provide an email address.");
+        }
+        
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            return alert("Please enter a valid email address.");
+        }
+        
+        if (this.employees[username] || this.managers[username]) {
+            return alert("Username already taken!");
+        }
 
-        // Generate Verification Code
-        const verifyCode = Math.floor(1000 + Math.random() * 9000).toString();
+        try {
+            // Send OTP via Supabase Auth
+            const { data, error } = await supabase.auth.signInWithOtp({
+                email: email,
+                options: {
+                    shouldCreateUser: false // Don't auto-create user yet
+                }
+            });
 
-        // Create Unassigned User
-        this.mockDB.users[username] = {
-            role: 'employee',
-            companyId: null,
-            email: email,
-            phone: phone,
-            passcode: passcode || null, // Optional Passcode
-            assignedSiteId: null,
-            status: 'checked-out',
-            verified: false, // Verification Required
-            verifyCode: verifyCode, // Store the code
-            history: [] // Init History
-        };
+            if (error) {
+                throw error;
+            }
 
-        this.saveDB();
+            // Store pending registration data
+            this.pendingRegistration = {
+                email: email,
+                username: username,
+                type: 'employee',
+                employeeData: {
+                    email: email,
+                    phone: phone || null,
+                    passcode: passcode || null,
+                    company_id: null,
+                    assigned_site_id: null,
+                    status: 'checked-out',
+                    verified: false
+                }
+            };
 
-        // SIMULATE SENDING CODE
-        const contact = email || phone;
-        alert(`📨 SIMULATION: Verification Code sent to ${contact}.\n\nCode: ${verifyCode}`);
-        console.log(`[SIMULATION] Code for ${username}: ${verifyCode}`);
-
-        alert(`🎉 Account Created! Please Login to Verify.`);
-        this.showView('view-auth');
+            this.showToast(`✉️ OTP sent to ${email}. Check your inbox!`, 'success');
+            this.showView('view-verify');
+        } catch (error) {
+            console.error('Error sending OTP:', error);
+            alert('Failed to send verification code: ' + error.message);
+        }
     }
 
     // --- VERIFICATION ---
-    verifyAccount() {
+    async verifyAccount() {
         const codeInput = document.getElementById('verify-code').value.trim();
 
-        if (!this.pendingUser) return this.showView('view-auth');
-
-        // Get Latest User Data
-        const user = this.mockDB.users[this.pendingUser.username];
-
-        // Check Code
-        if (codeInput !== user.verifyCode && codeInput !== "1234") { // Keep 1234 as master backdoor for testing
-            return alert("❌ Invalid Code. Please try again.");
+        if (!this.pendingRegistration) {
+            return this.showView('view-auth');
         }
 
-        // Success
-        if (this.pendingUser) {
-            const user = this.mockDB.users[this.pendingUser.username];
-            user.verified = true;
-            this.saveDB();
+        if (!codeInput) {
+            return alert("Please enter the verification code");
+        }
 
-            alert("✅ Email Verified Successfully!");
+        try {
+            // Verify OTP with Supabase Auth
+            const { data, error } = await supabase.auth.verifyOtp({
+                email: this.pendingRegistration.email,
+                token: codeInput,
+                type: 'email'
+            });
 
-            // Proceed to Login
-            this.currentUser = { username: this.pendingUser.username, ...user };
-            localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
-            this.pendingUser = null;
-
-            if (!this.mockDB.companies[user.companyId] && user.role === 'manager') {
-                this.mockDB.companies[user.companyId] = { sites: [], employees: [], logs: [] };
-                this.saveDB();
+            if (error) {
+                throw error;
             }
 
-            this.showView(user.role === 'manager' ? 'view-manager' : 'view-employee');
-            this.refreshDashboard();
+            // OTP verified successfully! Now create the account
+            if (this.pendingRegistration.type === 'manager') {
+                // Create manager account
+                await this.saveManager(this.pendingRegistration.username, this.pendingRegistration.managerData);
+                
+                alert("✅ Email Verified Successfully!");
+                alert(`🎉 Company "${this.pendingRegistration.companyName}" Created!\n\nCompany ID: ${this.pendingRegistration.companyId}\n\nPlease login with your credentials.`);
+                
+                // Pre-fill login form
+                document.getElementById('auth-username').value = this.pendingRegistration.username;
+                document.getElementById('auth-company').value = this.pendingRegistration.companyId;
+                
+            } else if (this.pendingRegistration.type === 'employee') {
+                // Create employee account
+                await this.saveEmployee(this.pendingRegistration.username, this.pendingRegistration.employeeData);
+                
+                alert("✅ Email Verified Successfully!");
+                alert(`🎉 Account Created!\n\nUsername: ${this.pendingRegistration.username}\n\nPlease login with your credentials.`);
+                
+                // Pre-fill login form
+                document.getElementById('auth-username').value = this.pendingRegistration.username;
+            }
+
+            // Clear pending registration
+            this.pendingRegistration = null;
+            this.pendingUser = null;
+
+            // Return to login view
+            this.showView('view-auth');
+        } catch (error) {
+            console.error('Error verifying OTP:', error);
+            alert('❌ Invalid or expired verification code. Please try again.\n\nError: ' + error.message);
         }
     }
 
@@ -256,13 +519,13 @@ class HRApp {
         if (!username) return alert("Please enter your Username");
 
         // --- AUTO-DETECT COMPANY ID LOGIC ---
-        const user = this.mockDB.users[username];
+        const user = this.managers[username] || this.employees[username];
         if (!user) return alert("User not found! Please Register first.");
 
         if (!companyId) {
             // Try to find it from user record
-            if (user.companyId) {
-                companyId = user.companyId;
+            if (user.company_id) {
+                companyId = user.company_id;
                 companyInput.value = companyId; // Auto-fill UI
                 alert(`ℹ️ Found Company ID: ${companyId}\nProcessing Login...`);
             } else {
@@ -271,8 +534,8 @@ class HRApp {
         }
 
         // --- STANDARD CHECKS ---
-        if (user.companyId && user.companyId !== companyId) {
-            return alert(`❌ Incorrect Company ID.\nThis user belongs to company: ${user.companyId}`);
+        if (user.company_id && user.company_id !== companyId) {
+            return alert(`❌ Incorrect Company ID.\nThis user belongs to company: ${user.company_id}`);
         }
 
         // --- PASSCODE CHECK (Optional) ---
@@ -290,7 +553,7 @@ class HRApp {
         }
 
         // Case: User exists but not assigned to a company yet
-        if (!user.companyId) {
+        if (!user.company_id) {
             return alert(`Welcome, ${username}!\n\nYou are not linked to a company yet.\nAsk your Manager to 'Register' you using username: "${username}".`);
         }
 
@@ -317,8 +580,8 @@ class HRApp {
             }
 
             // 2. Check Distance to Assigned Site
-            const company = this.mockDB.companies[user.companyId];
-            const site = company.sites.find(s => s.id === user.assignedSiteId);
+            const company = this.companies[user.company_id];
+            const site = Object.values(this.sites).find(s => s.id === user.assigned_site_id && s.company_id === user.company_id);
 
             if (!site) return alert("Error: Assigned Worksite not found. Contact Manager.");
 
@@ -461,11 +724,11 @@ class HRApp {
     }
 
     monitorGeofence() {
-        const user = this.mockDB.users[this.currentUser.username];
-        if (user.status !== 'checked-in') return;
+        const user = this.employees[this.currentUser.username];
+        if (!user || user.status !== 'checked-in') return;
 
-        const company = this.mockDB.companies[this.currentUser.companyId];
-        const site = company.sites.find(s => s.id === user.assignedSiteId);
+        const company = this.companies[this.currentUser.company_id];
+        const site = Object.values(this.sites).find(s => s.id === user.assigned_site_id && s.company_id === user.company_id);
         if (!site) return;
 
         if (!this.currentPosition) return; // Safety: require position to compute distance
@@ -519,7 +782,7 @@ class HRApp {
 
     // --- Manager Features ---
 
-    createSite() {
+    async createSite() {
         const siteName = document.getElementById('new-site-name').value.trim();
         if (!siteName) return alert("Enter a Site Name");
         if (!this.currentPosition) return alert("Waiting for GPS signal...");
@@ -529,26 +792,27 @@ class HRApp {
             return alert("⚠️ GPS Error: Your location is reading as (0,0). Please wait for a better signal.");
         }
 
-        const company = this.mockDB.companies[this.currentUser.companyId];
-
         const newSite = {
             id: 'site_' + Date.now(),
             name: siteName,
             lat: this.currentPosition.lat,
-            lng: this.currentPosition.lng
+            lng: this.currentPosition.lng,
+            company_id: this.currentUser.company_id
         };
 
-        if (!company.sites) company.sites = [];
-        company.sites.push(newSite);
-        this.saveDB();
-
-        alert(`Site "${siteName}" Created!`);
-        this.refreshDashboard();
-        // Clear input
-        document.getElementById('new-site-name').value = "";
+        try {
+            await this.saveSite(newSite);
+            alert(`Site "${siteName}" Created!`);
+            this.refreshDashboard();
+            // Clear input
+            document.getElementById('new-site-name').value = "";
+        } catch (error) {
+            console.error('Error creating site:', error);
+            alert('Failed to create site: ' + error.message);
+        }
     }
 
-    updateSiteLocation(siteId) {
+    async updateSiteLocation(siteId) {
         if (!this.currentPosition) return alert("Waiting for GPS...");
 
         // Guard against Null Island
@@ -556,115 +820,118 @@ class HRApp {
             return alert("⚠️ GPS Error: Your location is reading as (0,0). Please wait for a better signal.");
         }
 
-        const company = this.mockDB.companies[this.currentUser.companyId];
-        const site = company.sites.find(s => s.id === siteId);
+        const site = this.sites[siteId];
         if (!site) return;
 
         if (!confirm(`Update location for "${site.name}" to your CURRENT position?\n\nNew Coords: ${this.currentPosition.lat.toFixed(6)}, ${this.currentPosition.lng.toFixed(6)}`)) return;
 
-        site.lat = this.currentPosition.lat;
-        site.lng = this.currentPosition.lng;
-        this.saveDB();
-        this.refreshDashboard();
-        alert(`Location for "${site.name}" updated!`);
+        try {
+            site.lat = this.currentPosition.lat;
+            site.lng = this.currentPosition.lng;
+            await this.saveSite(site);
+            this.refreshDashboard();
+            alert(`Location for "${site.name}" updated!`);
+        } catch (error) {
+            console.error('Error updating site location:', error);
+            alert('Failed to update location: ' + error.message);
+        }
     }
 
-    registerEmployee() {
+    async registerEmployee() {
         const username = document.getElementById('new-emp-username').value.trim().toLowerCase();
         const contact = document.getElementById('new-emp-contact').value.trim();
         const siteSelect = document.getElementById('new-emp-site');
         const siteId = siteSelect.value;
         const passcode = document.getElementById('new-emp-passcode').value.trim(); // Optional
-        const company = this.mockDB.companies[this.currentUser.companyId];
 
         if (!username || !contact || !siteId) return alert("Fill all fields");
 
-        let user = this.mockDB.users[username];
+        try {
+            let user = this.employees[username];
 
-        // Scenario 1: User doesn't exist -> Create new
-        if (!user) {
-            user = {
-                role: 'employee',
-                companyId: this.currentUser.companyId,
-                email: contact.includes('@') ? contact : null,
-                phone: !contact.includes('@') ? contact : null,
-                passcode: passcode || null,
-                assignedSiteId: siteId,
-                status: 'checked-out',
-                verified: true
-            };
-            this.mockDB.users[username] = user;
-        }
-        // Scenario 2: User exists but unassigned -> Link
-        else if (user.companyId === null) {
-            user.companyId = this.currentUser.companyId;
-            user.assignedSiteId = siteId;
-            user.email = contact.includes('@') ? contact : null;
-            user.phone = !contact.includes('@') ? contact : null;
-        }
-        // Scenario 3: User belongs to another company
-        else if (user.companyId !== this.currentUser.companyId) {
-            return alert(`User "${username}" belongs to another company!`);
-        }
-        // Scenario 4: User in this company -> Update site
-        else {
-            user.assignedSiteId = siteId;
-            // Update in company list if exists
-            const existing = company.employees.find(e => e.username === username);
-            if (existing) existing.assignedSiteId = siteId;
+            // Scenario 1: User doesn't exist -> Create new
+            if (!user) {
+                user = {
+                    role: 'employee',
+                    company_id: this.currentUser.company_id,
+                    email: contact.includes('@') ? contact : null,
+                    phone: !contact.includes('@') ? contact : null,
+                    passcode: passcode || null,
+                    assigned_site_id: siteId,
+                    status: 'checked-out',
+                    verified: true
+                };
+                await this.saveEmployee(username, user);
+            }
+            // Scenario 2: User exists but unassigned -> Link
+            else if (user.company_id === null) {
+                user.company_id = this.currentUser.company_id;
+                user.assigned_site_id = siteId;
+                user.email = contact.includes('@') ? contact : null;
+                user.phone = !contact.includes('@') ? contact : null;
+                await this.saveEmployee(username, user);
+            }
+            // Scenario 3: User belongs to another company
+            else if (user.company_id !== this.currentUser.company_id) {
+                return alert(`User "${username}" belongs to another company!`);
+            }
+            // Scenario 4: User in this company -> Update site
+            else {
+                user.assigned_site_id = siteId;
+                await this.saveEmployee(username, user);
+                this.refreshDashboard();
+                alert(`Updated site for ${username}.`);
+                return;
+            }
 
-            this.saveDB();
+            // Update company's employee list in cache
+            if (!this.companies[this.currentUser.company_id].employees.includes(username)) {
+                this.companies[this.currentUser.company_id].employees.push(username);
+            }
+
+            alert(`Employee ${username} linked successfully!`);
             this.refreshDashboard();
-            alert(`Updated site for ${username}.`);
-            return;
+
+            // Clear inputs
+            document.getElementById('new-emp-username').value = "";
+            document.getElementById('new-emp-contact').value = "";
+        } catch (error) {
+            console.error('Error registering employee:', error);
+            alert('Failed to register employee: ' + error.message);
         }
-
-        // Add to Company List if not present
-        if (!company.employees) company.employees = [];
-        if (!company.employees.find(e => e.username === username)) {
-            company.employees.push({
-                username,
-                contact: contact,
-                assignedSiteId: siteId
-            });
-        }
-
-        this.saveDB();
-        alert(`Employee ${username} linked successfully!`);
-        this.refreshDashboard();
-
-        // Clear inputs
-        document.getElementById('new-emp-username').value = "";
-        document.getElementById('new-emp-contact').value = "";
     }
 
-    removeEmployee(username) {
+    async removeEmployee(username) {
         if (!confirm(`Are you sure you want to remove ${username} from the team?\nThey will be permanently deleted.`)) return;
 
-        // 1. Remove from Company List
-        const company = this.mockDB.companies[this.currentUser.companyId];
-        company.employees = company.employees.filter(e => e.username !== username);
+        try {
+            // 1. Remove from Global Users
+            await this.deleteEmployee(username);
 
-        // 2. Remove from Global Users
-        if (this.mockDB.users[username]) {
-            delete this.mockDB.users[username];
+            // 2. Remove from Company List
+            const idx = this.companies[this.currentUser.company_id].employees.indexOf(username);
+            if (idx > -1) {
+                this.companies[this.currentUser.company_id].employees.splice(idx, 1);
+            }
+
+            this.refreshDashboard();
+            alert("Employee removed.");
+        } catch (error) {
+            console.error('Error removing employee:', error);
+            alert('Failed to remove employee: ' + error.message);
         }
-
-        this.saveDB();
-        this.refreshDashboard();
-        alert("Employee removed.");
     }
 
     // --- Employee Features ---
 
-    checkIn() {
+    async checkIn() {
         if (!this.currentPosition) return alert("GPS not available.");
 
-        const user = this.mockDB.users[this.currentUser.username];
-        const company = this.mockDB.companies[this.currentUser.companyId];
+        const user = this.employees[this.currentUser.username];
+        const company = this.companies[this.currentUser.company_id];
 
         // Find assigned site
-        const site = company?.sites.find(s => s.id === user.assignedSiteId);
+        const site = Object.values(this.sites).find(s => s.id === user.assigned_site_id && s.company_id === user.company_id);
 
         if (!site) return alert("Error: Your assigned worksite was deleted or not found.");
 
@@ -677,63 +944,93 @@ class HRApp {
             return alert(`You are too far from ${site.name}! (${Math.round(dist)}m away)`);
         }
 
-        // Success
-        user.status = 'checked-in';
-        user.checkInTime = Date.now();
-        user.lastPing = Date.now();
+        try {
+            // Success
+            user.status = 'checked-in';
+            user.check_in_time = Date.now();
+            user.last_ping = Date.now();
 
-        // Start Tracking History
-        this.trackLocation(site.id); // Valid initial point
-        if (this.trackingInterval) clearInterval(this.trackingInterval);
-        this.trackingInterval = setInterval(() => {
-            this.trackLocation(site.id);
-        }, 300000); // Track every 5 minutes (300k ms)
+            await this.saveEmployee(this.currentUser.username, user);
 
-        // Add log entry
-        this.addLog(this.currentUser.companyId, this.currentUser.username, `Check-In @ ${site.name}`, new Date().toLocaleTimeString());
-        this.saveDB();
-        this.refreshDashboard();
+            // Start Tracking History
+            this.trackLocation(site.id); // Valid initial point
+            if (this.trackingInterval) clearInterval(this.trackingInterval);
+            this.trackingInterval = setInterval(() => {
+                this.trackLocation(site.id);
+            }, 300000); // Track every 5 minutes (300k ms)
+
+            // Add log entry
+            await this.saveCheckin({
+                username: this.currentUser.username,
+                company_id: this.currentUser.company_id,
+                action: `Check-In @ ${site.name}`,
+                time: new Date().toLocaleTimeString(),
+                site_id: site.id
+            });
+
+            this.refreshDashboard();
+        } catch (error) {
+            console.error('Error checking in:', error);
+            alert('Failed to check in: ' + error.message);
+        }
     }
 
-    trackLocation(siteId) {
+    async trackLocation(siteId) {
         if (!this.currentPosition || !this.currentUser) return;
-        const user = this.mockDB.users[this.currentUser.username];
+        const user = this.employees[this.currentUser.username];
         if (!user) return;
 
-        if (!user.history) user.history = [];
+        try {
+            if (!user.history) user.history = [];
 
-        user.history.push({
-            lat: this.currentPosition.lat,
-            lng: this.currentPosition.lng,
-            time: new Date().toLocaleString(),
-            siteId: siteId
-        });
+            user.history.push({
+                lat: this.currentPosition.lat,
+                lng: this.currentPosition.lng,
+                time: new Date().toLocaleString(),
+                siteId: siteId
+            });
 
-        // Limit history to last 50 points to save space
-        if (user.history.length > 50) user.history.shift();
-        this.saveDB();
+            // Limit history to last 50 points to save space
+            if (user.history.length > 50) user.history.shift();
+            
+            await this.saveEmployee(this.currentUser.username, user);
+        } catch (error) {
+            console.error('Error tracking location:', error);
+        }
     }
 
-    checkOut(reason = "Check-Out") {
+    async checkOut(reason = "Check-Out") {
         if (!this.currentUser) return;
-        const user = this.mockDB.users[this.currentUser.username];
+        const user = this.employees[this.currentUser.username];
         if (!user) return;
 
-        user.status = 'checked-out';
-        user.checkInTime = null;
+        try {
+            user.status = 'checked-out';
+            user.check_in_time = null;
 
-        // Stop Tracking
-        if (this.trackingInterval) clearInterval(this.trackingInterval);
+            // Stop Tracking
+            if (this.trackingInterval) clearInterval(this.trackingInterval);
 
-        // Add log entry
-        this.addLog(this.currentUser.companyId, this.currentUser.username, reason, new Date().toLocaleTimeString());
+            await this.saveEmployee(this.currentUser.username, user);
 
-        this.saveDB();
-        this.refreshDashboard();
+            // Add log entry
+            await this.saveCheckin({
+                username: this.currentUser.username,
+                company_id: this.currentUser.company_id,
+                action: reason,
+                time: new Date().toLocaleTimeString(),
+                site_id: null
+            });
+
+            this.refreshDashboard();
+        } catch (error) {
+            console.error('Error checking out:', error);
+            alert('Failed to check out: ' + error.message);
+        }
     }
 
     viewEmployeeHistory(username) {
-        const user = this.mockDB.users[username];
+        const user = this.employees[username];
         if (!user || !user.history || user.history.length === 0) {
             return alert(`No history found for ${username}.`);
         }
@@ -748,48 +1045,12 @@ class HRApp {
         // Ideally, we would switch to a dedicated view
     }
 
-    addLog(companyId, username, action, time) {
-        const company = this.mockDB.companies[companyId];
-        if (!company.logs) company.logs = [];
-        company.logs.unshift({ username, action, time });
-        if (company.logs.length > 20) company.logs.pop();
-    }
-
-    checkGeofence() {
-        if (!this.currentUser || this.currentUser.role !== 'employee') return;
-
-        const user = this.mockDB.users[this.currentUser.username];
-        if (!user || user.status !== 'checked-in') return;
-
-        const company = this.mockDB.companies[this.currentUser.companyId];
-        const site = company.sites.find(s => s.id === user.assignedSiteId);
-        if (!site) return;
-
-        if (!this.currentPosition) return; // Safety: require position to compute distance
-
-        // 1. Distance Check
-        const dist = this.getDistanceFromLatLonInMeters(
-            this.currentPosition.lat, this.currentPosition.lng,
-            site.lat, site.lng
-        );
-
-        // Debug display
-        const distElem = document.getElementById('debug-distance');
-        if (distElem) distElem.innerText = `Distance to ${site.name}: ${Math.round(dist)}m`;
-
-        if (dist > this.MAX_DISTANCE_METERS) {
-            // Auto Logout
-            alert(`⚠️ Debug Auto-Logout: You left the ${site.name} boundaries.`);
-            this.logout();
-        }
-    }
-
     refreshDashboard() {
         if (!this.currentUser) return;
 
         // Manager Logic
         if (this.currentUser.role === 'manager') {
-            const company = this.mockDB.companies[this.currentUser.companyId];
+            const company = this.getCompanyData(this.currentUser.company_id);
 
             // 1. Render Sites Config
             const siteSelect = document.getElementById('new-emp-site'); // The dropdown in Add Employee form
@@ -843,7 +1104,7 @@ class HRApp {
 
                         siteEmployees.forEach(emp => {
                             // Look up live status object
-                            const realUser = this.mockDB.users[emp.username];
+                            const realUser = this.employees[emp.username];
                             const isActive = realUser && realUser.status === 'checked-in';
 
                             html += `
@@ -909,7 +1170,7 @@ class HRApp {
         }
         // Employee Logic
         else {
-            const user = this.mockDB.users[this.currentUser.username] || { status: 'checked-out' };
+            const user = this.employees[this.currentUser.username] || { status: 'checked-out' };
             const isCheckedIn = user.status === 'checked-in';
 
             // UI Toggles
@@ -917,7 +1178,7 @@ class HRApp {
             document.getElementById('btn-checkout').style.display = isCheckedIn ? 'block' : 'none';
             document.getElementById('emp-timer').style.display = isCheckedIn ? 'block' : 'none';
 
-            if (isCheckedIn) this.startTimer(user.checkInTime);
+            if (isCheckedIn) this.startTimer(user.check_in_time);
             else if (this.timerInterval) clearInterval(this.timerInterval);
 
             const statusText = document.getElementById('emp-status-text');
@@ -959,16 +1220,16 @@ class HRApp {
     debugSetLocation(lat, lng) {
         this.currentPosition = { lat, lng };
         this.updateUIWithLocation();
-        this.checkGeofence();
         alert(`Debug: Teleported to ${lat}, ${lng}`);
     }
 
     // Debug: Dump DB to console/alert for troubleshooting
     debugDumpDB() {
         try {
-            const raw = localStorage.getItem('hrapp_db');
-            console.log('hrapp_db (localStorage):', raw);
-            console.log('mockDB (in-memory):', this.mockDB);
+            console.log('Managers (in-memory):', this.managers);
+            console.log('Employees (in-memory):', this.employees);
+            console.log('Sites (in-memory):', this.sites);
+            console.log('Logs (in-memory):', this.logs);
             alert('DB dumped to console. Open DevTools -> Console to inspect.');
         } catch (err) {
             alert('Failed to read DB: ' + err.message);

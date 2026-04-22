@@ -91,50 +91,96 @@ class HRApp {
                     }
                 }
 
-                if (!this.pendingRegistration || this.pendingRegistration.type !== 'manager') {
-                    console.log('Not a manager registration, skipping auto-registration');
+                if (!this.pendingRegistration || (!this.pendingRegistration.type)) {
+                    console.log('No pending registration found for auto-creation');
                     return;
                 }
 
-                // Check if this manager already exists in the managers table
-                const existingManager = this.managers[this.pendingRegistration.username];
+                // Handle Manager Registration via Magic Link
+                if (this.pendingRegistration.type === 'manager') {
+                    // Check if this manager already exists in the managers table
+                    const existingManager = this.managers[this.pendingRegistration.username];
 
-                if (existingManager) {
-                    console.log('Manager already exists in database, logging in...');
-                    // User already exists, just log them in
-                    this.currentUser = { username: this.pendingRegistration.username, ...existingManager };
-                    localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
-                    this.clearPendingRegistration();
-                    this.showView('view-manager');
-                    this.refreshDashboard();
-                    this.showToast('✅ Welcome back! You have been automatically logged in.', 'success');
-                } else {
-                    console.log('Manager does not exist yet, creating from pending registration...');
-                    // Manager doesn't exist, create their record using pending registration data
-                    try {
-                        this.pendingRegistration.managerData.verified = true;
-                        await this.saveManager(
-                            this.pendingRegistration.username,
-                            this.pendingRegistration.managerData
-                        );
-
-                        console.log('Manager record created successfully');
-
-                        // Get the newly created manager record
-                        const newManager = this.managers[this.pendingRegistration.username];
-
-                        // Log them in automatically
-                        this.currentUser = { username: this.pendingRegistration.username, ...newManager };
+                    if (existingManager) {
+                        console.log('Manager already exists in database, logging in...');
+                        // User already exists, just log them in
+                        this.currentUser = { username: this.pendingRegistration.username, ...existingManager };
                         localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
                         this.clearPendingRegistration();
-
-                        // Show success and redirect to dashboard
                         this.showView('view-manager');
                         this.refreshDashboard();
-                        this.showToast(`✅ Account verified and created! Welcome to your dashboard.`, 'success');
-                    } catch (error) {
-                        console.error('Error creating manager record:', error);
-                        this.showToast('❌ Failed to complete account setup: ' + error.message, 'error');
+                        this.showToast('✅ Welcome back! You have been automatically logged in.', 'success');
+                    } else {
+                        console.log('Manager does not exist yet, creating from pending registration...');
+                        // Manager doesn't exist, create their record using pending registration data
+                        try {
+                            this.pendingRegistration.managerData.verified = true;
+                            await this.saveManager(
+                                this.pendingRegistration.username,
+                                this.pendingRegistration.managerData
+                            );
+
+                            console.log('Manager record created successfully');
+
+                            // Get the newly created manager record
+                            const newManager = this.managers[this.pendingRegistration.username];
+
+                            // Log them in automatically
+                            this.currentUser = { username: this.pendingRegistration.username, ...newManager };
+                            localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
+                            this.clearPendingRegistration();
+
+                            // Show success and redirect to dashboard
+                            this.showView('view-manager');
+                            this.refreshDashboard();
+                            this.showToast(`✅ Account verified and created! Welcome to your dashboard.`, 'success');
+                        } catch (error) {
+                            console.error('Error creating manager record:', error);
+                            this.showToast('❌ Failed to complete account setup: ' + error.message, 'error');
+                        }
+                    }
+                }
+                // Handle Employee Registration via Magic Link
+                else if (this.pendingRegistration.type === 'employee') {
+                    const existingEmployee = this.employees[this.pendingRegistration.username];
+
+                    if (existingEmployee) {
+                        console.log('Employee already exists in database, logging in...');
+                        // User already exists, just log them in
+                        this.currentUser = { username: this.pendingRegistration.username, ...existingEmployee };
+                        localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
+                        this.clearPendingRegistration();
+                        this.showView('view-employee');
+                        this.refreshDashboard();
+                        this.showToast('✅ Welcome back! You have been automatically logged in.', 'success');
+                    } else {
+                        console.log('Employee does not exist yet, creating from pending registration...');
+                        // Employee doesn't exist, create their record using pending registration data
+                        try {
+                            this.pendingRegistration.employeeData.verified = true;
+                            await this.saveEmployee(
+                                this.pendingRegistration.username,
+                                this.pendingRegistration.employeeData
+                            );
+
+                            console.log('Employee record created successfully');
+
+                            // Get the newly created employee record
+                            const newEmployee = this.employees[this.pendingRegistration.username];
+
+                            // Log them in automatically
+                            this.currentUser = { username: this.pendingRegistration.username, ...newEmployee };
+                            localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
+                            this.clearPendingRegistration();
+
+                            // Show success and redirect to dashboard
+                            this.showView('view-employee');
+                            this.refreshDashboard();
+                            this.showToast(`✅ Account verified and created! Welcome to your dashboard.`, 'success');
+                        } catch (error) {
+                            console.error('Error creating employee record:', error);
+                            this.showToast('❌ Failed to complete account setup: ' + error.message, 'error');
+                        }
                     }
                 }
             }
@@ -281,16 +327,20 @@ class HRApp {
     // Save employee to Supabase
     async saveEmployee(username, employeeData) {
         try {
+            // Filter out fields that don't exist in Supabase schema
+            const { history, ...dbData } = employeeData;
+            
             const { error } = await supabase
                 .from('employees')
                 .upsert({ 
                     username, 
-                    ...employeeData,
+                    ...dbData,
                     updated_at: new Date().toISOString()
                 }, { 
                     onConflict: 'username' 
                 });
             if (error) throw error;
+            // Keep the full data in memory cache
             this.employees[username] = { username, ...employeeData };
         } catch (error) {
             console.error('Error saving employee:', error);
@@ -615,8 +665,11 @@ class HRApp {
                 alert("✅ Email Verified Successfully!");
                 alert(`🎉 Account Created!\n\nUsername: ${this.pendingRegistration.username}\n\nPlease login with your credentials.`);
                 
-                // Pre-fill login form
-                document.getElementById('auth-username').value = this.pendingRegistration.username;
+                // Pre-fill login form if element exists
+                const usernameField = document.getElementById('auth-username');
+                if (usernameField) {
+                    usernameField.value = this.pendingRegistration.username;
+                }
             }
 
             // Clear pending registration
@@ -845,7 +898,7 @@ class HRApp {
         if (statusEl) statusEl.innerHTML = `<span style="color:var(--success)">✅ Mock Location Active</span>`;
     }
 
-    monitorGeofence() {
+    async monitorGeofence() {
         const user = this.employees[this.currentUser.username];
         if (!user || user.status !== 'checked-in') return;
 
@@ -864,7 +917,7 @@ class HRApp {
         if (dist > this.MAX_DISTANCE_METERS) {
             // Warning and Auto-Checkout (Stop Timer), but DO NOT kick to login screen
             alert(`⚠️ GEOCONFIG ALERT\n\nYou have left the worksite boundary (${Math.round(dist)}m).\n\nYour shift has been PAUSED (Auto Check-Out).`);
-            this.checkOut("Geofence Exit");
+            await this.checkOut("Geofence Exit");
             // LEAVE USER LOGGED IN so they can see what happened
             // this.logout(); // REMOVED
         }
@@ -915,7 +968,7 @@ class HRApp {
         }
 
         const newSite = {
-            id: 'site_' + Date.now(),
+            id: Date.now(),
             name: siteName,
             lat: this.currentPosition.lat,
             lng: this.currentPosition.lng,
@@ -1296,9 +1349,13 @@ class HRApp {
             const isCheckedIn = user.status === 'checked-in';
 
             // UI Toggles
-            document.getElementById('btn-checkin').style.display = isCheckedIn ? 'none' : 'block';
-            document.getElementById('btn-checkout').style.display = isCheckedIn ? 'block' : 'none';
-            document.getElementById('emp-timer').style.display = isCheckedIn ? 'block' : 'none';
+            const btnCheckin = document.getElementById('btn-checkin');
+            const btnCheckout = document.getElementById('btn-checkout');
+            const empTimer = document.getElementById('emp-timer');
+            
+            if (btnCheckin) btnCheckin.style.display = isCheckedIn ? 'none' : 'block';
+            if (btnCheckout) btnCheckout.style.display = isCheckedIn ? 'block' : 'none';
+            if (empTimer) empTimer.style.display = isCheckedIn ? 'block' : 'none';
 
             if (isCheckedIn) this.startTimer(user.check_in_time);
             else if (this.timerInterval) clearInterval(this.timerInterval);
@@ -1307,14 +1364,16 @@ class HRApp {
             const statusIcon = document.getElementById('emp-status-icon');
             const empBox = document.getElementById('emp-status-box');
 
-            if (isCheckedIn) {
-                statusText.innerText = "Checked In";
-                statusIcon.innerText = "✅";
-                empBox.style.background = "rgba(40, 167, 69, 0.2)";
-            } else {
-                statusText.innerText = "Checked Out";
-                statusIcon.innerText = "🛑";
-                empBox.style.background = "rgba(255, 77, 77, 0.1)";
+            if (statusText && statusIcon && empBox) {
+                if (isCheckedIn) {
+                    statusText.innerText = "Checked In";
+                    statusIcon.innerText = "✅";
+                    empBox.style.background = "rgba(40, 167, 69, 0.2)";
+                } else {
+                    statusText.innerText = "Checked Out";
+                    statusIcon.innerText = "🛑";
+                    empBox.style.background = "rgba(255, 77, 77, 0.1)";
+                }
             }
         }
     }

@@ -334,11 +334,32 @@ class HRApp {
 
     async registerNewCompany() {
         const companyName = document.getElementById('reg-company-name').value.trim();
+        const customCompanyId = document.getElementById('reg-company-id').value.trim().toUpperCase();
         const managerName = document.getElementById('reg-manager-name').value.trim().toLowerCase();
         const managerEmail = document.getElementById('reg-manager-email').value.trim();
 
-        if (!companyName || !managerName || !managerEmail) {
-            return alert("Please fill all fields (Company Name, Manager Username, and Email)");
+        if (!companyName || !customCompanyId || !managerName || !managerEmail) {
+            return alert("Please fill all fields (Company Name, Company ID, Manager Username, and Email)");
+        }
+        
+        // Validate Company ID format: only letters, numbers, and hyphens
+        const companyIdRegex = /^[A-Z0-9-]+$/;
+        if (!companyIdRegex.test(customCompanyId)) {
+            return alert("Company ID can only contain letters, numbers, and hyphens (no spaces or special characters)");
+        }
+
+        if (customCompanyId.length < 3) {
+            return alert("Company ID must be at least 3 characters long");
+        }
+
+        if (customCompanyId.length > 20) {
+            return alert("Company ID cannot exceed 20 characters");
+        }
+        
+        // Check if Company ID is already taken
+        const companyIdTaken = Object.values(this.managers).some(m => m.company_id === customCompanyId);
+        if (companyIdTaken) {
+            return alert("This Company ID is already taken! Please choose a different one.");
         }
         
         // Validate email format
@@ -353,9 +374,6 @@ class HRApp {
         }
 
         try {
-            // Generate Company ID
-            const companyId = (companyName.substring(0, 4) + Math.floor(1000 + Math.random() * 9000)).toUpperCase();
-
             // Send 6-digit OTP via Supabase Auth
             const { data, error } = await supabase.auth.signInWithOtp({
                 email: managerEmail,
@@ -373,10 +391,10 @@ class HRApp {
                 email: managerEmail,
                 username: managerName,
                 type: 'manager',
-                companyId: companyId,
+                companyId: customCompanyId,
                 companyName: companyName,
                 managerData: {
-                    company_id: companyId,
+                    company_id: customCompanyId,
                     role: 'manager',
                     verified: false
                 }

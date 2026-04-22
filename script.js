@@ -47,6 +47,9 @@ class HRApp {
             // Load initial data from Supabase
             await this.loadAllData();
 
+            // Setup Supabase auth state listener for magic link redirect flow
+            this.setupAuthStateListener();
+
             // Restore session if exists from localStorage
             const storedUser = localStorage.getItem('hrapp_user');
             if (storedUser) {
@@ -66,6 +69,83 @@ class HRApp {
             console.error('Error in initAsync:', error);
             alert('Initialization error: ' + error.message);
         }
+    }
+
+    // Setup Supabase Auth State Listener for Magic Link Flow
+    setupAuthStateListener() {
+        supabase.auth.onAuthStateChange(async (event, session) => {
+            console.log('Auth state changed:', event, session);
+
+            // Only handle the magic link verification callback event
+            if (event === 'SIGNED_IN' && session && session.user) {
+                const authUser = session.user;
+                console.log('User signed in via magic link:', authUser.email);
+
+                // Get or use pending registration data
+                if (!this.pendingRegistration) {
+                    console.log('No pending registration found, retrieving from storage if available');
+                    const storedPending = localStorage.getItem('hrapp_pending_registration');
+                    if (storedPending) {
+                        this.pendingRegistration = JSON.parse(storedPending);
+                        console.log('Restored pending registration:', this.pendingRegistration);
+                    }
+                }
+
+                if (!this.pendingRegistration || this.pendingRegistration.type !== 'manager') {
+                    console.log('Not a manager registration, skipping auto-registration');
+                    return;
+                }
+
+                // Check if this manager already exists in the managers table
+                const existingManager = this.managers[this.pendingRegistration.username];
+
+                if (existingManager) {
+                    console.log('Manager already exists in database, logging in...');
+                    // User already exists, just log them in
+                    this.currentUser = { username: this.pendingRegistration.username, ...existingManager };
+                    localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
+                    this.clearPendingRegistration();
+                    this.showView('view-manager');
+                    this.refreshDashboard();
+                    this.showToast('✅ Welcome back! You have been automatically logged in.', 'success');
+                } else {
+                    console.log('Manager does not exist yet, creating from pending registration...');
+                    // Manager doesn't exist, create their record using pending registration data
+                    try {
+                        this.pendingRegistration.managerData.verified = true;
+                        await this.saveManager(
+                            this.pendingRegistration.username,
+                            this.pendingRegistration.managerData
+                        );
+
+                        console.log('Manager record created successfully');
+
+                        // Get the newly created manager record
+                        const newManager = this.managers[this.pendingRegistration.username];
+
+                        // Log them in automatically
+                        this.currentUser = { username: this.pendingRegistration.username, ...newManager };
+                        localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
+                        this.clearPendingRegistration();
+
+                        // Show success and redirect to dashboard
+                        this.showView('view-manager');
+                        this.refreshDashboard();
+                        this.showToast(`✅ Account verified and created! Welcome to your dashboard.`, 'success');
+                    } catch (error) {
+                        console.error('Error creating manager record:', error);
+                        this.showToast('❌ Failed to complete account setup: ' + error.message, 'error');
+                    }
+                }
+            }
+        });
+    }
+
+    // Helper: Clear pending registration data
+    clearPendingRegistration() {
+        this.pendingRegistration = null;
+        this.pendingUser = null;
+        localStorage.removeItem('hrapp_pending_registration');
     }
 
     // Load all data from Supabase into memory cache
@@ -172,16 +252,25 @@ class HRApp {
     // Save manager to Supabase
     async saveManager(username, managerData) {
         try {
+            const insertData = { 
+                username, 
+                ...managerData,
+                updated_at: new Date().toISOString()
+            };
+            console.log('Sending manager data to Supabase:', insertData);
+            
             const { error } = await supabase
                 .from('managers')
-                .upsert({ 
-                    username, 
-                    ...managerData,
-                    updated_at: new Date().toISOString()
-                }, { 
+                .upsert(insertData, { 
                     onConflict: 'username' 
                 });
-            if (error) throw error;
+                
+            if (error) {
+                console.error('Supabase returned error for managers upsert:', error);
+                throw error;
+            }
+            
+            console.log('Successfully saved manager to Supabase!');
             this.managers[username] = { username, ...managerData };
         } catch (error) {
             console.error('Error saving manager:', error);
@@ -336,9 +425,15 @@ class HRApp {
         const companyName = document.getElementById('reg-company-name').value.trim();
         const managerName = document.getElementById('reg-manager-name').value.trim().toLowerCase();
         const managerEmail = document.getElementById('reg-manager-email').value.trim();
+        const managerPassword = document.getElementById('reg-manager-password').value.trim();
+        const companyIdInput = document.getElementById('reg-company-id').value.trim().toUpperCase();
 
         if (!companyName || !managerName || !managerEmail) {
             return alert("Please fill all fields (Company Name, Manager Username, and Email)");
+        }
+
+        if (!managerPassword) {
+            return alert("Please create a password for your account.");
         }
         
         // Validate email format
@@ -353,22 +448,26 @@ class HRApp {
         }
 
         try {
-            // Generate Company ID
-            const companyId = (companyName.substring(0, 4) + Math.floor(1000 + Math.random() * 9000)).toUpperCase();
+            // Use user-provided Company ID or generate one
+            const companyId = companyIdInput || (companyName.substring(0, 4) + Math.floor(1000 + Math.random() * 9000)).toUpperCase();
 
+            console.log('registerNewCompany: Sending OTP to email', managerEmail);
             // Send OTP via Supabase Auth
             const { data, error } = await supabase.auth.signInWithOtp({
                 email: managerEmail,
                 options: {
-                    shouldCreateUser: false // Don't auto-create user yet
+                    shouldCreateUser: true // Allow new users to receive OTP
                 }
             });
 
             if (error) {
+                console.error('registerNewCompany: Error sending OTP', error);
                 throw error;
             }
+            
+            console.log('registerNewCompany: OTP sent successfully, data:', data);
 
-            // Store pending registration data
+            // Store pending registration data with ALL required fields
             this.pendingRegistration = {
                 email: managerEmail,
                 username: managerName,
@@ -377,10 +476,16 @@ class HRApp {
                 companyName: companyName,
                 managerData: {
                     company_id: companyId,
+                    password: managerPassword,
                     role: 'manager',
+                    name: managerName,
+                    email: managerEmail,
                     verified: false
                 }
             };
+
+            // Persist to localStorage so it survives the redirect from magic link
+            localStorage.setItem('hrapp_pending_registration', JSON.stringify(this.pendingRegistration));
 
             this.showToast(`✉️ OTP sent to ${managerEmail}. Check your inbox!`, 'success');
             this.showView('view-verify');
@@ -442,6 +547,9 @@ class HRApp {
                 }
             };
 
+            // Persist to localStorage so it survives the redirect from magic link
+            localStorage.setItem('hrapp_pending_registration', JSON.stringify(this.pendingRegistration));
+
             this.showToast(`✉️ OTP sent to ${email}. Check your inbox!`, 'success');
             this.showView('view-verify');
         } catch (error) {
@@ -463,6 +571,7 @@ class HRApp {
         }
 
         try {
+            console.log('verifyAccount: Verifying OTP for email:', this.pendingRegistration.email);
             // Verify OTP with Supabase Auth
             const { data, error } = await supabase.auth.verifyOtp({
                 email: this.pendingRegistration.email,
@@ -471,23 +580,36 @@ class HRApp {
             });
 
             if (error) {
+                console.error('verifyAccount: Error verifying OTP', error);
                 throw error;
             }
+            console.log('verifyAccount: OTP verified successfully, data:', data);
 
             // OTP verified successfully! Now create the account
             if (this.pendingRegistration.type === 'manager') {
                 // Create manager account
+                this.pendingRegistration.managerData.verified = true;
                 await this.saveManager(this.pendingRegistration.username, this.pendingRegistration.managerData);
                 
                 alert("✅ Email Verified Successfully!");
-                alert(`🎉 Company "${this.pendingRegistration.companyName}" Created!\n\nCompany ID: ${this.pendingRegistration.companyId}\n\nPlease login with your credentials.`);
+                alert(`🎉 Company "${this.pendingRegistration.companyName}" Created!\n\nCompany ID: ${this.pendingRegistration.companyId}\n\nRedirecting to your dashboard...`);
                 
-                // Pre-fill login form
-                document.getElementById('auth-username').value = this.pendingRegistration.username;
-                document.getElementById('auth-company').value = this.pendingRegistration.companyId;
+                // Log the user in immediately
+                const user = this.managers[this.pendingRegistration.username];
+                this.currentUser = { username: this.pendingRegistration.username, ...user };
+                localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
+                
+                // Clear pending registration
+                this.clearPendingRegistration();
+
+                // Redirect to manager dashboard
+                this.showView('view-manager');
+                if (this.refreshDashboard) this.refreshDashboard();
+                return;
                 
             } else if (this.pendingRegistration.type === 'employee') {
                 // Create employee account
+                this.pendingRegistration.employeeData.verified = true;
                 await this.saveEmployee(this.pendingRegistration.username, this.pendingRegistration.employeeData);
                 
                 alert("✅ Email Verified Successfully!");
@@ -498,8 +620,7 @@ class HRApp {
             }
 
             // Clear pending registration
-            this.pendingRegistration = null;
-            this.pendingUser = null;
+            this.clearPendingRegistration();
 
             // Return to login view
             this.showView('view-auth');
@@ -609,6 +730,7 @@ class HRApp {
         // The employee remains 'checked-in' even if they log out of the device.
 
         this.currentUser = null;
+        this.clearPendingRegistration();
         localStorage.removeItem('hrapp_user');
         this.showView('view-auth');
         // Stop timer

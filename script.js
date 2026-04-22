@@ -337,9 +337,14 @@ class HRApp {
         const customCompanyId = document.getElementById('reg-company-id').value.trim().toUpperCase();
         const managerName = document.getElementById('reg-manager-name').value.trim().toLowerCase();
         const managerEmail = document.getElementById('reg-manager-email').value.trim();
+        const managerPassword = document.getElementById('reg-manager-password').value.trim();
 
-        if (!companyName || !customCompanyId || !managerName || !managerEmail) {
-            return alert("Please fill all fields (Company Name, Company ID, Manager Username, and Email)");
+        if (!companyName || !customCompanyId || !managerName || !managerEmail || !managerPassword) {
+            return alert("Please fill all fields (Company Name, Company ID, Manager Username, Email, and Password)");
+        }
+
+        if (managerPassword.length < 6) {
+            return alert("Password must be at least 6 characters long");
         }
         
         // Validate Company ID format: only letters, numbers, and hyphens
@@ -393,10 +398,15 @@ class HRApp {
                 type: 'manager',
                 companyId: customCompanyId,
                 companyName: companyName,
+                password: managerPassword,
                 managerData: {
                     company_id: customCompanyId,
                     role: 'manager',
-                    verified: false
+                    verified: false,
+                    password: managerPassword,
+                    name: managerName,
+                    email: managerEmail
+                }
                 }
             };
 
@@ -497,26 +507,22 @@ class HRApp {
 
             // OTP verified successfully! Now create the account
             if (this.pendingRegistration.type === 'manager') {
-                // Generate a password for the manager
-                const generatedPassword = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+                // Use the password captured during registration
+                const managerPassword = this.pendingRegistration.password;
                 
                 // Create manager account with password
-                const managerDataWithPassword = {
-                    ...this.pendingRegistration.managerData,
-                    password: generatedPassword
-                };
-                await this.saveManager(this.pendingRegistration.username, managerDataWithPassword);
+                await this.saveManager(this.pendingRegistration.username, this.pendingRegistration.managerData);
                 
                 // Show prominent Company ID notification
                 this.showToast(`✅ Email Verified! Company Created.`, 'success', 3000);
                 this.showToast(`📋 Company ID: ${this.pendingRegistration.companyId}`, 'info', 8000);
                 
-                alert(`✅ Email Verified Successfully!\n\n🎉 Company "${this.pendingRegistration.companyName}" Created!\n\n📌 YOUR COMPANY ID:\n${this.pendingRegistration.companyId}\n\n📝 YOUR PASSWORD:\n${generatedPassword}\n\nSave both - you'll need them to login.\n\nUsername: ${this.pendingRegistration.username}`);
+                alert(`✅ Email Verified Successfully!\n\n🎉 Company "${this.pendingRegistration.companyName}" Created!\n\n📌 YOUR COMPANY ID:\n${this.pendingRegistration.companyId}\n\n📝 YOUR PASSWORD:\n${managerPassword}\n\nSave both - you'll need them to login.\n\nUsername: ${this.pendingRegistration.username}`);
                 
                 // Pre-fill login form
                 document.getElementById('auth-username').value = this.pendingRegistration.username;
                 document.getElementById('auth-company').value = this.pendingRegistration.companyId;
-                document.getElementById('auth-passcode').value = generatedPassword;
+                document.getElementById('auth-passcode').value = managerPassword;
                 
             } else if (this.pendingRegistration.type === 'employee') {
                 // Create employee account

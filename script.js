@@ -497,18 +497,26 @@ class HRApp {
 
             // OTP verified successfully! Now create the account
             if (this.pendingRegistration.type === 'manager') {
-                // Create manager account
-                await this.saveManager(this.pendingRegistration.username, this.pendingRegistration.managerData);
+                // Generate a password for the manager
+                const generatedPassword = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+                
+                // Create manager account with password
+                const managerDataWithPassword = {
+                    ...this.pendingRegistration.managerData,
+                    password: generatedPassword
+                };
+                await this.saveManager(this.pendingRegistration.username, managerDataWithPassword);
                 
                 // Show prominent Company ID notification
                 this.showToast(`✅ Email Verified! Company Created.`, 'success', 3000);
                 this.showToast(`📋 Company ID: ${this.pendingRegistration.companyId}`, 'info', 8000);
                 
-                alert(`✅ Email Verified Successfully!\n\n🎉 Company "${this.pendingRegistration.companyName}" Created!\n\n📌 YOUR COMPANY ID:\n${this.pendingRegistration.companyId}\n\nSave this ID - you'll need it to login.\n\nUsername: ${this.pendingRegistration.username}`);
+                alert(`✅ Email Verified Successfully!\n\n🎉 Company "${this.pendingRegistration.companyName}" Created!\n\n📌 YOUR COMPANY ID:\n${this.pendingRegistration.companyId}\n\n📝 YOUR PASSWORD:\n${generatedPassword}\n\nSave both - you'll need them to login.\n\nUsername: ${this.pendingRegistration.username}`);
                 
                 // Pre-fill login form
                 document.getElementById('auth-username').value = this.pendingRegistration.username;
                 document.getElementById('auth-company').value = this.pendingRegistration.companyId;
+                document.getElementById('auth-passcode').value = generatedPassword;
                 
             } else if (this.pendingRegistration.type === 'employee') {
                 // Create employee account
@@ -536,130 +544,54 @@ class HRApp {
     async login() {
         const usernameInput = document.getElementById('auth-username');
         const companyInput = document.getElementById('auth-company');
+        const passwordInput = document.getElementById('auth-passcode');
 
         const username = usernameInput.value.trim().toLowerCase();
-        let companyId = companyInput.value.trim().toUpperCase();
+        const companyId = companyInput.value.trim().toUpperCase();
+        const password = passwordInput.value.trim();
 
         if (!username) return alert("Please enter your Username");
+        if (!companyId) return alert("Please enter your Company ID");
+        if (!password) return alert("Please enter your Password");
 
         try {
-            // --- FETCH USER FROM SUPABASE ---
-            let user = this.managers[username] || this.employees[username];
-            
-            // If not in cache, check Supabase directly
-            if (!user) {
-                // Try to find in managers table
-                const { data: managerData, error: managerError } = await supabase
-                    .from('managers')
-                    .select('*')
-                    .eq('username', username)
-                    .single();
+            // --- QUERY MANAGERS TABLE ---
+            const { data: managerData, error: managerError } = await supabase
+                .from('managers')
+                .select('*')
+                .eq('username', username)
+                .eq('company_id', companyId)
+                .single();
 
-                if (managerData) {
-                    user = managerData;
-                    this.managers[username] = user; // Cache it
-                } else {
-                    // Try to find in employees table
-                    const { data: employeeData, error: employeeError } = await supabase
-                        .from('employees')
-                        .select('*')
-                        .eq('username', username)
-                        .single();
-
-                    if (employeeData) {
-                        user = employeeData;
-                        this.employees[username] = user; // Cache it
-                    }
-                }
+            if (managerError || !managerData) {
+                return alert("❌ Manager not found.\n\nPlease check your Username and Company ID.");
             }
 
-            if (!user) {
-                return alert("User not found! Please Register first.");
-            }
+            const manager = managerData;
 
-            // --- AUTO-DETECT COMPANY ID LOGIC ---
-            if (!companyId) {
-                // Try to find it from user record
-                if (user.company_id) {
-                    companyId = user.company_id;
-                    companyInput.value = companyId; // Auto-fill UI
-                    alert(`ℹ️ Found Company ID: ${companyId}\nProcessing Login...`);
-                } else {
-                    return alert("Welcome! You do not have a Company ID yet.\nPlease ask your Manager to link your account.");
-                }
-            }
-
-            // --- STANDARD CHECKS ---
-            if (user.company_id && user.company_id !== companyId) {
-                return alert(`❌ Incorrect Company ID.\nThis user belongs to company: ${user.company_id}`);
-            }
-
-            // --- PASSCODE CHECK (Optional) ---
-            if (user.passcode) {
-                const passInput = document.getElementById('auth-passcode').value.trim();
-                if (!passInput) return alert(`🔒 This account is protected.\nEnter your Passcode to login.`);
-                if (passInput !== user.passcode) return alert(`❌ Invalid Passcode.`);
+            // --- VERIFY PASSWORD ---
+            if (!manager.password || manager.password !== password) {
+                return alert("❌ Invalid Password.");
             }
 
             // --- EMAIL VERIFICATION CHECK ---
-            if (user.verified === false) {
-                this.pendingUser = { username, ...user };
+            if (manager.verified === false) {
+                this.pendingUser = { username, ...manager };
                 this.showView('view-verify');
                 return;
             }
 
-            // Case: User exists but not assigned to a company yet
-            if (!user.company_id) {
-                return alert(`Welcome, ${username}!\n\nYou are not linked to a company yet.\nAsk your Manager to 'Register' you using username: "${username}".`);
-            }
-
-            // --- STRICT LOCATION CHECK (Employees Only) ---
-            if (user.role === 'employee') {
-                // 1. Check if GPS is ready
-                if (!this.currentPosition) {
-                    alert("📍 DETECTING LOCATION...\n\nPlease allow GPS access and wait a moment.\nWe are fetching your precise location now.");
-
-                    // Force a high-accuracy read
-                    navigator.geolocation.getCurrentPosition(
-                        (pos) => {
-                            this.currentPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-                            this.updateUIWithLocation();
-                            alert("✅ GPS Linked! Click 'Login' again.");
-                        },
-                        (err) => {
-                            alert("❌ GPS Error: " + err.message + "\nEnsure Location Services are ON.");
-                            this.updateUIWithLocation(true, err.message); // Update UI with error
-                        },
-                        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-                    );
-                    return; // Stop login until GPS is ready
-                }
-
-                // 2. Check Distance to Assigned Site
-                const company = this.companies[user.company_id];
-                const site = Object.values(this.sites).find(s => s.id === user.assigned_site_id && s.company_id === user.company_id);
-
-                if (!site) return alert("Error: Assigned Worksite not found. Contact Manager.");
-
-                const dist = this.getDistanceFromLatLonInMeters(
-                    this.currentPosition.lat, this.currentPosition.lng,
-                    site.lat, site.lng
-                );
-
-                if (dist > this.MAX_DISTANCE_METERS) {
-                    return alert(`🚫 ACCESS DENIED\n\nYou are ${Math.round(dist)} meters away from ${site.name}.\n\nYou must be within ${this.MAX_DISTANCE_METERS}m to log in.`);
-                }
-            }
-            // ---------------------------------------------
-
-            // Login Success
-            this.currentUser = { username, ...user };
+            // Manager Login Success
+            this.currentUser = { username, ...manager };
             localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
+            
+            // Cache the manager
+            this.managers[username] = manager;
 
-            this.showView(user.role === 'manager' ? 'view-manager' : 'view-employee');
+            this.showView('view-manager');
             this.refreshDashboard();
         } catch (error) {
-            console.error('Login error:', error);
+            console.error('Manager login error:', error);
             alert('Login failed: ' + error.message);
         }
     }

@@ -100,7 +100,7 @@ class HRApp {
 
             // Load sites
             const { data: sitesData, error: sitesError } = await supabase
-                .from('sites')
+                .from('site')
                 .select('*');
             if (sitesError) throw sitesError;
             sitesData?.forEach(s => {
@@ -213,7 +213,7 @@ class HRApp {
     async saveSite(siteData) {
         try {
             const { data, error } = await supabase
-                .from('sites')
+                .from('site')
                 .upsert({ 
                     ...siteData,
                     updated_at: new Date().toISOString()
@@ -300,7 +300,7 @@ class HRApp {
             // Save all sites
             for (const [siteId, site] of Object.entries(this.sites)) {
                 const { error } = await supabase
-                    .from('sites')
+                    .from('site')
                     .upsert({ ...site, updated_at: new Date().toISOString() }, { onConflict: 'id' });
                 if (error) throw error;
             }

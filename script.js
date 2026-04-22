@@ -533,7 +533,7 @@ class HRApp {
         }
     }
 
-    login() {
+    async login() {
         const usernameInput = document.getElementById('auth-username');
         const companyInput = document.getElementById('auth-company');
 
@@ -542,90 +542,126 @@ class HRApp {
 
         if (!username) return alert("Please enter your Username");
 
-        // --- AUTO-DETECT COMPANY ID LOGIC ---
-        const user = this.managers[username] || this.employees[username];
-        if (!user) return alert("User not found! Please Register first.");
+        try {
+            // --- FETCH USER FROM SUPABASE ---
+            let user = this.managers[username] || this.employees[username];
+            
+            // If not in cache, check Supabase directly
+            if (!user) {
+                // Try to find in managers table
+                const { data: managerData, error: managerError } = await supabase
+                    .from('managers')
+                    .select('*')
+                    .eq('username', username)
+                    .single();
 
-        if (!companyId) {
-            // Try to find it from user record
-            if (user.company_id) {
-                companyId = user.company_id;
-                companyInput.value = companyId; // Auto-fill UI
-                alert(`ℹ️ Found Company ID: ${companyId}\nProcessing Login...`);
-            } else {
-                return alert("Welcome! You do not have a Company ID yet.\nPlease ask your Manager to link your account.");
+                if (managerData) {
+                    user = managerData;
+                    this.managers[username] = user; // Cache it
+                } else {
+                    // Try to find in employees table
+                    const { data: employeeData, error: employeeError } = await supabase
+                        .from('employees')
+                        .select('*')
+                        .eq('username', username)
+                        .single();
+
+                    if (employeeData) {
+                        user = employeeData;
+                        this.employees[username] = user; // Cache it
+                    }
+                }
             }
-        }
 
-        // --- STANDARD CHECKS ---
-        if (user.company_id && user.company_id !== companyId) {
-            return alert(`❌ Incorrect Company ID.\nThis user belongs to company: ${user.company_id}`);
-        }
+            if (!user) {
+                return alert("User not found! Please Register first.");
+            }
 
-        // --- PASSCODE CHECK (Optional) ---
-        if (user.passcode) {
-            const passInput = document.getElementById('auth-passcode').value.trim();
-            if (!passInput) return alert(`🔒 This account is protected.\nEnter your Passcode to login.`);
-            if (passInput !== user.passcode) return alert(`❌ Invalid Passcode.`);
-        }
+            // --- AUTO-DETECT COMPANY ID LOGIC ---
+            if (!companyId) {
+                // Try to find it from user record
+                if (user.company_id) {
+                    companyId = user.company_id;
+                    companyInput.value = companyId; // Auto-fill UI
+                    alert(`ℹ️ Found Company ID: ${companyId}\nProcessing Login...`);
+                } else {
+                    return alert("Welcome! You do not have a Company ID yet.\nPlease ask your Manager to link your account.");
+                }
+            }
 
-        // --- EMAIL VERIFICATION CHECK ---
-        if (user.verified === false) {
-            this.pendingUser = { username, ...user };
-            this.showView('view-verify');
-            return;
-        }
+            // --- STANDARD CHECKS ---
+            if (user.company_id && user.company_id !== companyId) {
+                return alert(`❌ Incorrect Company ID.\nThis user belongs to company: ${user.company_id}`);
+            }
 
-        // Case: User exists but not assigned to a company yet
-        if (!user.company_id) {
-            return alert(`Welcome, ${username}!\n\nYou are not linked to a company yet.\nAsk your Manager to 'Register' you using username: "${username}".`);
-        }
+            // --- PASSCODE CHECK (Optional) ---
+            if (user.passcode) {
+                const passInput = document.getElementById('auth-passcode').value.trim();
+                if (!passInput) return alert(`🔒 This account is protected.\nEnter your Passcode to login.`);
+                if (passInput !== user.passcode) return alert(`❌ Invalid Passcode.`);
+            }
 
-        // --- STRICT LOCATION CHECK (Employees Only) ---
-        if (user.role === 'employee') {
-            // 1. Check if GPS is ready
-            if (!this.currentPosition) {
-                alert("📍 DETECTING LOCATION...\n\nPlease allow GPS access and wait a moment.\nWe are fetching your precise location now.");
+            // --- EMAIL VERIFICATION CHECK ---
+            if (user.verified === false) {
+                this.pendingUser = { username, ...user };
+                this.showView('view-verify');
+                return;
+            }
 
-                // Force a high-accuracy read
-                navigator.geolocation.getCurrentPosition(
-                    (pos) => {
-                        this.currentPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-                        this.updateUIWithLocation();
-                        alert("✅ GPS Linked! Click 'Login' again.");
-                    },
-                    (err) => {
-                        alert("❌ GPS Error: " + err.message + "\nEnsure Location Services are ON.");
-                        this.updateUIWithLocation(true, err.message); // Update UI with error
-                    },
-                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            // Case: User exists but not assigned to a company yet
+            if (!user.company_id) {
+                return alert(`Welcome, ${username}!\n\nYou are not linked to a company yet.\nAsk your Manager to 'Register' you using username: "${username}".`);
+            }
+
+            // --- STRICT LOCATION CHECK (Employees Only) ---
+            if (user.role === 'employee') {
+                // 1. Check if GPS is ready
+                if (!this.currentPosition) {
+                    alert("📍 DETECTING LOCATION...\n\nPlease allow GPS access and wait a moment.\nWe are fetching your precise location now.");
+
+                    // Force a high-accuracy read
+                    navigator.geolocation.getCurrentPosition(
+                        (pos) => {
+                            this.currentPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                            this.updateUIWithLocation();
+                            alert("✅ GPS Linked! Click 'Login' again.");
+                        },
+                        (err) => {
+                            alert("❌ GPS Error: " + err.message + "\nEnsure Location Services are ON.");
+                            this.updateUIWithLocation(true, err.message); // Update UI with error
+                        },
+                        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                    );
+                    return; // Stop login until GPS is ready
+                }
+
+                // 2. Check Distance to Assigned Site
+                const company = this.companies[user.company_id];
+                const site = Object.values(this.sites).find(s => s.id === user.assigned_site_id && s.company_id === user.company_id);
+
+                if (!site) return alert("Error: Assigned Worksite not found. Contact Manager.");
+
+                const dist = this.getDistanceFromLatLonInMeters(
+                    this.currentPosition.lat, this.currentPosition.lng,
+                    site.lat, site.lng
                 );
-                return; // Stop login until GPS is ready
+
+                if (dist > this.MAX_DISTANCE_METERS) {
+                    return alert(`🚫 ACCESS DENIED\n\nYou are ${Math.round(dist)} meters away from ${site.name}.\n\nYou must be within ${this.MAX_DISTANCE_METERS}m to log in.`);
+                }
             }
+            // ---------------------------------------------
 
-            // 2. Check Distance to Assigned Site
-            const company = this.companies[user.company_id];
-            const site = Object.values(this.sites).find(s => s.id === user.assigned_site_id && s.company_id === user.company_id);
+            // Login Success
+            this.currentUser = { username, ...user };
+            localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
 
-            if (!site) return alert("Error: Assigned Worksite not found. Contact Manager.");
-
-            const dist = this.getDistanceFromLatLonInMeters(
-                this.currentPosition.lat, this.currentPosition.lng,
-                site.lat, site.lng
-            );
-
-            if (dist > this.MAX_DISTANCE_METERS) {
-                return alert(`🚫 ACCESS DENIED\n\nYou are ${Math.round(dist)} meters away from ${site.name}.\n\nYou must be within ${this.MAX_DISTANCE_METERS}m to log in.`);
-            }
+            this.showView(user.role === 'manager' ? 'view-manager' : 'view-employee');
+            this.refreshDashboard();
+        } catch (error) {
+            console.error('Login error:', error);
+            alert('Login failed: ' + error.message);
         }
-        // ---------------------------------------------
-
-        // Login Success
-        this.currentUser = { username, ...user };
-        localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
-
-        this.showView(user.role === 'manager' ? 'view-manager' : 'view-employee');
-        this.refreshDashboard();
     }
 
     logout() {

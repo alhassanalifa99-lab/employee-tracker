@@ -1,3 +1,4 @@
+import { supabase } from './supabase.js';
 /**
  * The HR app
  * Core Logic - Handles State, Geolocation, and UI Updates.

@@ -30,6 +30,7 @@ class HRApp {
         this.sites = {};
         this.companies = {};
         this.logs = {};
+        this.subscriptions = {}; // Track active Supabase subscriptions
 
         // Wrap init in try-catch just in case
         try {
@@ -46,6 +47,9 @@ class HRApp {
 
             // Load initial data from Supabase
             await this.loadAllData();
+
+            // Setup real-time subscriptions for instant updates
+            this.setupRealtimeSubscriptions();
 
             // Setup Supabase auth state listener for magic link redirect flow
             this.setupAuthStateListener();
@@ -68,6 +72,71 @@ class HRApp {
         } catch (error) {
             console.error('Error in initAsync:', error);
             alert('Initialization error: ' + error.message);
+        }
+    }
+
+    // Setup Real-time Subscriptions for Employees and Checkins
+    setupRealtimeSubscriptions() {
+        try {
+            // Subscribe to employees table for status changes
+            const employeesChannel = supabase.channel('employees_changes')
+                .on(
+                    'postgres_changes',
+                    { event: '*', schema: 'public', table: 'employees' },
+                    (payload) => {
+                        console.log('Employee update received:', payload);
+                        const newData = payload.new;
+                        if (newData && newData.username) {
+                            // Update local cache with new employee data
+                            this.employees[newData.username] = newData;
+                            // If this is the current user, update currentUser too
+                            if (this.currentUser && this.currentUser.username === newData.username) {
+                                this.currentUser = { ...this.currentUser, ...newData };
+                                localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
+                            }
+                            // Refresh dashboard to show updated status
+                            if (this.currentUser && this.currentUser.role === 'manager') {
+                                this.refreshDashboard();
+                            }
+                        }
+                    }
+                )
+                .subscribe((status) => {
+                    if (status === 'SUBSCRIBED') {
+                        console.log('✅ Subscribed to employees table changes');
+                    }
+                });
+            this.subscriptions.employees = employeesChannel;
+
+            // Subscribe to checkins table for new entries
+            const checkinsChannel = supabase.channel('checkins_changes')
+                .on(
+                    'postgres_changes',
+                    { event: 'INSERT', schema: 'public', table: 'checkins' },
+                    (payload) => {
+                        console.log('New checkin received:', payload);
+                        const newCheckin = payload.new;
+                        if (newCheckin && newCheckin.company_id) {
+                            // Add to logs cache
+                            if (!this.logs[newCheckin.company_id]) {
+                                this.logs[newCheckin.company_id] = [];
+                            }
+                            this.logs[newCheckin.company_id].unshift(newCheckin);
+                            // Refresh dashboard to show new checkin
+                            if (this.currentUser && this.currentUser.role === 'manager') {
+                                this.refreshDashboard();
+                            }
+                        }
+                    }
+                )
+                .subscribe((status) => {
+                    if (status === 'SUBSCRIBED') {
+                        console.log('✅ Subscribed to checkins table changes');
+                    }
+                });
+            this.subscriptions.checkins = checkinsChannel;
+        } catch (error) {
+            console.error('Error setting up real-time subscriptions:', error);
         }
     }
 
@@ -492,9 +561,30 @@ class HRApp {
             return alert("Please enter a valid email address");
         }
         
-        // Check if manager already exists
+        // Check if manager username already exists locally
         if (this.managers[managerName]) {
             return alert("Username already taken! Choose another manager username.");
+        }
+
+        // Check if email already exists in Supabase managers table
+        try {
+            const { data: existingEmails, error: queryError } = await supabase
+                .from('managers')
+                .select('email')
+                .eq('email', managerEmail)
+                .limit(1);
+            
+            if (queryError) {
+                console.error('Error checking email uniqueness:', queryError);
+                return alert("Error checking email: " + queryError.message);
+            }
+            
+            if (existingEmails && existingEmails.length > 0) {
+                return alert("This email is already registered. Please use a different email address.");
+            }
+        } catch (error) {
+            console.error('Error validating email uniqueness:', error);
+            return alert("Error validating email: " + error.message);
         }
 
         try {
@@ -755,7 +845,7 @@ class HRApp {
 
             // 2. Check Distance to Assigned Site
             const company = this.companies[user.company_id];
-            const site = Object.values(this.sites).find(s => s.id === user.assigned_site_id && s.company_id === user.company_id);
+            const site = Object.values(this.sites).find(s => String(s.id) === String(user.assigned_site_id) && s.company_id === user.company_id);
 
             if (!site) return alert("Error: Assigned Worksite not found. Contact Manager.");
 
@@ -788,6 +878,9 @@ class HRApp {
         this.showView('view-auth');
         // Stop timer
         if (this.timerInterval) clearInterval(this.timerInterval);
+        // Unsubscribe from real-time updates
+        if (this.subscriptions.employees) supabase.removeChannel(this.subscriptions.employees);
+        if (this.subscriptions.checkins) supabase.removeChannel(this.subscriptions.checkins);
     }
 
     // --- Geolocation ---
@@ -903,7 +996,7 @@ class HRApp {
         if (!user || user.status !== 'checked-in') return;
 
         const company = this.companies[this.currentUser.company_id];
-        const site = Object.values(this.sites).find(s => s.id === user.assigned_site_id && s.company_id === user.company_id);
+        const site = Object.values(this.sites).find(s => String(s.id) === String(user.assigned_site_id) && s.company_id === user.company_id);
         if (!site) return;
 
         if (!this.currentPosition) return; // Safety: require position to compute distance
@@ -1105,8 +1198,8 @@ class HRApp {
         const user = this.employees[this.currentUser.username];
         const company = this.companies[this.currentUser.company_id];
 
-        // Find assigned site
-        const site = Object.values(this.sites).find(s => s.id === user.assigned_site_id && s.company_id === user.company_id);
+        // Find assigned site - ensure ID comparison handles both string and number types
+        const site = Object.values(this.sites).find(s => String(s.id) === String(user.assigned_site_id) && s.company_id === user.company_id);
 
         if (!site) return alert("Error: Your assigned worksite was deleted or not found.");
 
@@ -1120,10 +1213,11 @@ class HRApp {
         }
 
         try {
-            // Success
+            // Success - Update employee status in Supabase
+            const checkInTime = new Date().toISOString();
             user.status = 'checked-in';
-            user.check_in_time = Date.now();
-            user.last_ping = Date.now();
+            user.check_in_time = checkInTime;
+            user.last_ping = checkInTime;
 
             await this.saveEmployee(this.currentUser.username, user);
 
@@ -1180,8 +1274,10 @@ class HRApp {
         if (!user) return;
 
         try {
+            // Update employee status in Supabase
             user.status = 'checked-out';
             user.check_in_time = null;
+            user.last_ping = new Date().toISOString();
 
             // Stop Tracking
             if (this.trackingInterval) clearInterval(this.trackingInterval);
@@ -1268,8 +1364,11 @@ class HRApp {
             if (teamStatusDiv && company.sites) {
                 let html = '';
                 company.sites.forEach(site => {
-                    // Filter employees for this site
-                    const siteEmployees = company.employees.filter(emp => emp.assignedSiteId === site.id);
+                    // Get all employees from Supabase data (this.employees) that are assigned to this site and company
+                    const siteEmployees = Object.values(this.employees).filter(emp => 
+                        emp.company_id === this.currentUser.company_id && 
+                        String(emp.assigned_site_id) === String(site.id)
+                    );
 
                     if (siteEmployees.length > 0) {
                         html += `<div class="site-status-group">
@@ -1278,9 +1377,8 @@ class HRApp {
                             </h3>`;
 
                         siteEmployees.forEach(emp => {
-                            // Look up live status object
-                            const realUser = this.employees[emp.username];
-                            const isActive = realUser && realUser.status === 'checked-in';
+                            // Use the actual employee status from Supabase data
+                            const isActive = emp.status === 'checked-in';
 
                             html += `
                                 <div class="team-member-item">
@@ -1321,9 +1419,14 @@ class HRApp {
             // 5. Render Team Management List
             const teamList = document.getElementById('team-list-container');
             if (teamList) {
-                if (company.employees && company.employees.length > 0) {
-                    teamList.innerHTML = company.employees.map(emp => {
-                        const siteName = company.sites.find(s => s.id === emp.assignedSiteId)?.name || 'Unknown Site';
+                // Get all employees from Supabase data that belong to this company
+                const companyEmployees = Object.values(this.employees).filter(emp => 
+                    emp.company_id === this.currentUser.company_id
+                );
+                
+                if (companyEmployees && companyEmployees.length > 0) {
+                    teamList.innerHTML = companyEmployees.map(emp => {
+                        const siteName = company.sites.find(s => String(s.id) === String(emp.assigned_site_id))?.name || 'Unknown Site';
                         return `
                         <div class="team-member-item">
                             <div>

@@ -189,6 +189,9 @@ class HRApp {
                                 this.pendingRegistration.managerData
                             );
 
+                            // Create trial subscription for the new company
+                            await this.createTrialSubscription(this.pendingRegistration.companyId);
+
                             console.log('Manager record created successfully');
 
                             // Get the newly created manager record
@@ -389,6 +392,39 @@ class HRApp {
             this.managers[username] = { username, ...managerData };
         } catch (error) {
             console.error('Error saving manager:', error);
+            throw error;
+        }
+    }
+
+    // Create trial subscription for new company
+    async createTrialSubscription(companyId) {
+        try {
+            // Calculate trial end date (30 days from now)
+            const trialEndDate = new Date();
+            trialEndDate.setDate(trialEndDate.getDate() + 30);
+            
+            const subscriptionData = {
+                company_id: companyId,
+                status: 'trial',
+                trial_end: trialEndDate.toISOString(),
+                created_at: new Date().toISOString()
+            };
+            
+            console.log('Creating trial subscription:', subscriptionData);
+            
+            const { data, error } = await supabase
+                .from('subscriptions')
+                .insert(subscriptionData);
+            
+            if (error) {
+                console.error('Error creating trial subscription:', error);
+                throw error;
+            }
+            
+            console.log('✅ Trial subscription created successfully');
+            return data;
+        } catch (error) {
+            console.error('Error creating trial subscription:', error);
             throw error;
         }
     }
@@ -596,7 +632,8 @@ class HRApp {
             const { data, error } = await supabase.auth.signInWithOtp({
                 email: managerEmail,
                 options: {
-                    shouldCreateUser: true // Allow new users to receive OTP
+                    shouldCreateUser: true, // Allow new users to receive OTP
+                    emailRedirectTo: 'https://employee-tracker-sooty.vercel.app'
                 }
             });
 
@@ -663,7 +700,8 @@ class HRApp {
             const { data, error } = await supabase.auth.signInWithOtp({
                 email: email,
                 options: {
-                    shouldCreateUser: false // Don't auto-create user yet
+                    shouldCreateUser: false, // Don't auto-create user yet
+                    emailRedirectTo: 'https://employee-tracker-sooty.vercel.app'
                 }
             });
 
@@ -730,6 +768,9 @@ class HRApp {
                 // Create manager account
                 this.pendingRegistration.managerData.verified = true;
                 await this.saveManager(this.pendingRegistration.username, this.pendingRegistration.managerData);
+                
+                // Create trial subscription for the new company
+                await this.createTrialSubscription(this.pendingRegistration.companyId);
                 
                 alert("✅ Email Verified Successfully!");
                 alert(`🎉 Company "${this.pendingRegistration.companyName}" Created!\n\nCompany ID: ${this.pendingRegistration.companyId}\n\nRedirecting to your dashboard...`);

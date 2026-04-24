@@ -150,14 +150,14 @@ class HRApp {
                 const authUser = session.user;
                 console.log('User signed in via magic link:', authUser.email);
 
-                // Get or use pending registration data
+               // Get or use pending registration data
                 if (!this.pendingRegistration) {
                     console.log('No pending registration found, retrieving from storage if available');
                     const storedPending = localStorage.getItem('hrapp_pending_registration');
                     if (storedPending) {
                         this.pendingRegistration = JSON.parse(storedPending);
                         console.log('Restored pending registration:', this.pendingRegistration);
-                    }
+                     }
                 }
 
                 if (!this.pendingRegistration || (!this.pendingRegistration.type)) {
@@ -167,92 +167,138 @@ class HRApp {
 
                 // Handle Manager Registration via Magic Link
                 if (this.pendingRegistration.type === 'manager') {
-                    // Check if this manager already exists in the managers table
-                    const existingManager = this.managers[this.pendingRegistration.username];
+                    try {
+                        // Query the database directly to check if manager exists (more reliable than cache)
+                        const { data: existingManagerData, error: queryError } = await supabase
+                            .from('managers')
+                            .select('*')
+                            .eq('username', this.pendingRegistration.username)
+                            .maybeSingle();
 
-                    if (existingManager) {
-                        console.log('Manager already exists in database, logging in...');
-                        // User already exists, just log them in
-                        this.currentUser = { username: this.pendingRegistration.username, ...existingManager };
-                        localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
-                        this.clearPendingRegistration();
-                        this.showView('view-manager');
-                        this.refreshDashboard();
-                        this.showToast('✅ Welcome back! You have been automatically logged in.', 'success');
-                    } else {
-                        console.log('Manager does not exist yet, creating from pending registration...');
-                        // Manager doesn't exist, create their record using pending registration data
-                        try {
-                            this.pendingRegistration.managerData.verified = true;
+                        if (queryError) {
+                            console.error('Error querying managers table:', queryError);
+                            throw queryError;
+                        }
+
+                        if (existingManagerData) {
+                            console.log('Manager already exists in database, logging in...');
+                            // User already exists, just log them in
+                            this.currentUser = { username: this.pendingRegistration.username, ...existingManagerData };
+                            localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
+                            this.clearPendingRegistration();
+                            this.showView('view-manager');
+                            this.refreshDashboard();
+                            this.showToast('✅ Welcome back! You have been automatically logged in.', 'success');
+                        } else {
+                            console.log('Manager does not exist yet, creating from pending registration...');
+                            // Manager doesn't exist, create their record using pending registration data from localStorage
+                            const managerData = this.pendingRegistration.managerData || {};
+                            managerData.verified = true;
+                            
                             await this.saveManager(
                                 this.pendingRegistration.username,
-                                this.pendingRegistration.managerData
+                                managerData
                             );
 
                             // Create trial subscription for the new company
                             await this.createTrialSubscription(this.pendingRegistration.companyId);
-
                             console.log('Manager record created successfully');
 
-                            // Get the newly created manager record
-                            const newManager = this.managers[this.pendingRegistration.username];
+                            // Fetch the newly created manager record from Supabase
+                            const { data: newManagerData, error: fetchError } = await supabase
+                                .from('managers')
+                                .select('*')
+                                .eq('username', this.pendingRegistration.username)
+                                .maybeSingle();
+
+                            if (fetchError) {
+                                console.error('Error fetching newly created manager:', fetchError);
+                                throw fetchError;
+                            }
 
                             // Log them in automatically
-                            this.currentUser = { username: this.pendingRegistration.username, ...newManager };
+                            this.currentUser = { username: this.pendingRegistration.username, ...newManagerData };
                             localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
                             this.clearPendingRegistration();
+
+                            // Update the in-memory cache
+                            this.managers[this.pendingRegistration.username] = newManagerData;
 
                             // Show success and redirect to dashboard
                             this.showView('view-manager');
                             this.refreshDashboard();
                             this.showToast(`✅ Account verified and created! Welcome to your dashboard.`, 'success');
-                        } catch (error) {
-                            console.error('Error creating manager record:', error);
-                            this.showToast('❌ Failed to complete account setup: ' + error.message, 'error');
                         }
+                    } catch (error) {
+                        console.error('Error during manager magic link flow:', error);
+                        this.showToast('❌ Failed to complete account setup: ' + error.message, 'error');
                     }
                 }
                 // Handle Employee Registration via Magic Link
                 else if (this.pendingRegistration.type === 'employee') {
-                    const existingEmployee = this.employees[this.pendingRegistration.username];
+                    try {
+                        // Query the database directly to check if employee exists (more reliable than cache)
+                        const { data: existingEmployeeData, error: queryError } = await supabase
+                            .from('employees')
+                            .select('*')
+                            .eq('username', this.pendingRegistration.username)
+                            .maybeSingle();
 
-                    if (existingEmployee) {
-                        console.log('Employee already exists in database, logging in...');
-                        // User already exists, just log them in
-                        this.currentUser = { username: this.pendingRegistration.username, ...existingEmployee };
-                        localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
-                        this.clearPendingRegistration();
-                        this.showView('view-employee');
-                        this.refreshDashboard();
-                        this.showToast('✅ Welcome back! You have been automatically logged in.', 'success');
-                    } else {
-                        console.log('Employee does not exist yet, creating from pending registration...');
-                        // Employee doesn't exist, create their record using pending registration data
-                        try {
-                            this.pendingRegistration.employeeData.verified = true;
+                        if (queryError) {
+                            console.error('Error querying employees table:', queryError);
+                            throw queryError;
+                        }
+
+                        if (existingEmployeeData) {
+                            console.log('Employee already exists in database, logging in...');
+                            // User already exists, just log them in
+                            this.currentUser = { username: this.pendingRegistration.username, ...existingEmployeeData };
+                            localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
+                            this.clearPendingRegistration();
+                            this.showView('view-employee');
+                            this.refreshDashboard();
+                            this.showToast('✅ Welcome back! You have been automatically logged in.', 'success');
+                        } else {
+                            console.log('Employee does not exist yet, creating from pending registration...');
+                            // Employee doesn't exist, create their record using pending registration data from localStorage
+                            const employeeData = this.pendingRegistration.employeeData || {};
+                            employeeData.verified = true;
+                            
                             await this.saveEmployee(
                                 this.pendingRegistration.username,
-                                this.pendingRegistration.employeeData
+                                employeeData
                             );
 
                             console.log('Employee record created successfully');
 
-                            // Get the newly created employee record
-                            const newEmployee = this.employees[this.pendingRegistration.username];
+                            // Fetch the newly created employee record from Supabase
+                            const { data: newEmployeeData, error: fetchError } = await supabase
+                                .from('employees')
+                                .select('*')
+                                .eq('username', this.pendingRegistration.username)
+                                .maybeSingle();
+
+                            if (fetchError) {
+                                console.error('Error fetching newly created employee:', fetchError);
+                                throw fetchError;
+                            }
 
                             // Log them in automatically
-                            this.currentUser = { username: this.pendingRegistration.username, ...newEmployee };
+                            this.currentUser = { username: this.pendingRegistration.username, ...newEmployeeData };
                             localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
                             this.clearPendingRegistration();
+
+                            // Update the in-memory cache
+                            this.employees[this.pendingRegistration.username] = newEmployeeData;
 
                             // Show success and redirect to dashboard
                             this.showView('view-employee');
                             this.refreshDashboard();
                             this.showToast(`✅ Account verified and created! Welcome to your dashboard.`, 'success');
-                        } catch (error) {
-                            console.error('Error creating employee record:', error);
-                            this.showToast('❌ Failed to complete account setup: ' + error.message, 'error');
                         }
+                    } catch (error) {
+                        console.error('Error during employee magic link flow:', error);
+                        this.showToast('❌ Failed to complete account setup: ' + error.message, 'error');
                     }
                 }
             }

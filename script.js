@@ -822,99 +822,53 @@ class HRApp {
 
     // --- Geolocation ---
 
-    watchLocation() {
-        // 1. Check Secure Context (Required for Geolocation)
-        if (!window.isSecureContext && window.location.hostname !== 'localhost') {
-            const statusEl = document.getElementById('auth-gps-status');
-            if (statusEl) statusEl.innerHTML = `<span style="color:var(--danger)">⚠️ Error: App must use HTTPS.</span>`;
-            return alert("GPS REQUIREMENT MISSING:\n\nThis app must be run over HTTPS (Secure Encription) to use Location features.\n\nPlease check your URL.");
-        }
-
-        if (!navigator.geolocation) {
-            alert("Geolocation is not supported by your browser");
-            return;
-        }
-
-        // Update UI
+   watchLocation() {
+    if (!window.isSecureContext && window.location.hostname !== 'localhost') {
         const statusEl = document.getElementById('auth-gps-status');
-        if (statusEl) statusEl.innerHTML = `<span>🔄 Trying High Precision GPS... (5s)</span>`;
-
-        // AGGRESSIVE STRATEGY: Try High Accuracy for 5s
-        const options = {
-            enableHighAccuracy: true,
-            maximumAge: 0,
-            timeout: 5000
-        };
-
-        this.watchId = navigator.geolocation.watchPosition(
-            (position) => {
-                this.currentPosition = {
-                    lat: position.coords.latitude,
-                    lng: position.coords.longitude
-                };
-                this.updateUIWithLocation();
-
-                if (this.currentUser && this.currentUser.role === 'employee') {
-                    this.monitorGeofence();
-                }
-            },
-            (error) => {
-                console.error("GPS Watch Error:", error);
-
-                // If High Accuracy fails (timeout or unavailable), switch to Low immediately
-                if (error.code === 3 || error.code === 2) {
-                    if (statusEl) statusEl.innerHTML = `<span>📶 Switching to WiFi/Cell Network...</span>`;
-                    console.log("High Acc failed. Falling back to Low Accuracy...");
-
-                    navigator.geolocation.clearWatch(this.watchId); // Stop broken watcher
-
-                    // Start Low Accuracy Watcher with VERY permissible options
-                    this.watchId = navigator.geolocation.watchPosition(
-                        (pos) => {
-                            this.currentPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-                            this.updateUIWithLocation();
-                            if (this.currentUser && this.currentUser.role === 'employee') {
-                                this.monitorGeofence();
-                            }
-                        },
-                        (err) => {
-                            console.error("Low accuracy also failed", err);
-                            let lowMsg = "Unknown Error";
-                            if (err.code === 1) lowMsg = "Permission Denied";
-                            if (err.code === 2) lowMsg = "Signal Unavailable";
-                            if (err.code === 3) lowMsg = "Timeout";
-
-                            if (statusEl) {
-                                statusEl.innerHTML = `
-                                    <div class="gps-status-message gps-status-warning">
-                                        <span>⚠️ Failed: ${lowMsg}</span>
-                                        <div style="display:flex; gap:8px; justify-content:center; margin-top:4px;">
-                                            <button onclick="app.watchLocation()" class="btn-retry-gps">RETRY</button>
-                                            <button onclick="app.useMockLocation()" class="btn-retry-gps" style="background:var(--primary-gradient); border:none;">USE MOCK LOC</button>
-                                        </div>
-                                    </div>`;
-                            }
-                        },
-                        {
-                            enableHighAccuracy: false,
-                            timeout: 60000, // Wait up to 60s for anything
-                            maximumAge: Infinity // Accept cached positions
-                        }
-                    );
-                } else {
-                    // Denied (Code 1) -> User must fix settings
-                    let msg = "GPS Error";
-                    if (error.code === 1) msg = "⚠️ Location Permission Denied.";
-                    if (statusEl) statusEl.innerHTML = `
-                        <div class="gps-status-message gps-status-warning" style="background: rgba(239, 68, 68, 0.2); border: 1px solid var(--danger);">
-                            <div style="font-weight:bold;">⚠️ GPS Error ${error.code}: ${msg}</div>
-                            <button onclick="app.useMockLocation()" class="btn-retry-gps" style="margin-top:4px; width:100%; background:var(--primary);">USE MOCK LOCATION</button>
-                        </div>`;
-                }
-            },
-            options
-        );
+        if (statusEl) {
+            statusEl.className = 'gps-pill error';
+            statusEl.innerHTML = `<span class="gps-dot"></span><span>HTTPS required for GPS</span>`;
+        }
+        return alert("GPS REQUIREMENT MISSING:\n\nThis app must be run over HTTPS to use Location features.");
     }
+
+    if (!navigator.geolocation) {
+        alert("Geolocation is not supported by your browser");
+        return;
+    }
+
+    const statusEl = document.getElementById('auth-gps-status');
+    if (statusEl) {
+        statusEl.className = 'gps-pill waiting';
+        statusEl.innerHTML = `<span class="gps-dot"></span><span>Acquiring GPS signal...</span>`;
+    }
+
+    const options = { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 };
+
+    this.watchId = navigator.geolocation.watchPosition(
+        (position) => {
+            this.currentPosition = {
+                lat: position.coords.latitude,
+                lng: position.coords.longitude
+            };
+            this.updateUIWithLocation();
+            if (this.currentUser && this.currentUser.role === 'employee') {
+                this.monitorGeofence();
+            }
+        },
+        (error) => {
+            console.error("GPS Watch Error:", error);
+
+            if (error.code === 3 || error.code === 2) {
+                if (statusEl) {
+                    statusEl.className = 'gps-pill waiting';
+                    statusEl.innerHTML = `<span class="gps-dot"></span><span>Switching to network location...</span>`;
+                }
+            }
+        },
+        options
+    );
+}
 
     useMockLocation() {
         // Fallback for testing/dev environments without GPS
@@ -925,7 +879,10 @@ class HRApp {
             this.monitorGeofence();
         }
         const statusEl = document.getElementById('auth-gps-status');
-        if (statusEl) statusEl.innerHTML = `<span style="color:var(--success)">✅ Mock Location Active</span>`;
+       if (statusEl) {
+    statusEl.innerHTML = `<span class="gps-dot"></span><span>Mock Location Active (NYC)</span>`;
+    statusEl.className = 'gps-pill success';
+}
     }
 
     async monitorGeofence() {
@@ -977,12 +934,11 @@ class HRApp {
             document.getElementById('emp-coords').innerText = text;
 
         // Update Login Screen Status
-        const statusEl = document.getElementById('auth-gps-status');
-        if (statusEl) {
-            statusEl.innerHTML = `<span class="t-success">✅ GPS Active</span> <span class="monospace-text">${this.currentPosition.lat.toFixed(4)}...</span>`;
-            statusEl.classList.remove('gps-status-warning');
-            statusEl.classList.add('gps-status-success');
-        }
+      const statusEl = document.getElementById('auth-gps-status');
+if (statusEl) {
+    statusEl.className = 'gps-pill success';
+    statusEl.innerHTML = `<span class="gps-dot"></span><span>GPS Active — ${this.currentPosition.lat.toFixed(4)}, ${this.currentPosition.lng.toFixed(4)}</span>`;
+}
     }
 
     // --- Manager Features ---

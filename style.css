@@ -1078,65 +1078,6 @@ select option { background: var(--surface-2); }
         pointer-events: none;
     }
 }
-/* ═══════════════════════════════════════
-   NUCLEAR OVERRIDE - FIXES VIEW BLEED
-═══════════════════════════════════════ */
-#view-auth,
-#view-verify,
-#view-register,
-#view-register-emp,
-#view-manager,
-#view-employee {
-    display: none !important;
-}
- 
-#view-auth.active,
-#view-verify.active,
-#view-register.active,
-#view-register-emp.active,
-#view-manager.active,
-#view-employee.active {
-    display: flex !important;
-}
-#view-manager.active {
-    display: grid !important;
-    grid-template-columns: 280px 1fr 1fr;
-    grid-template-rows: auto auto auto auto 1fr auto;
-    height: calc(100vh - 73px);
-    padding: 0;
-    gap: 0;
-    overflow: hidden;
-    align-items: start;
-}
-
-#view-employee.active {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: auto auto auto auto 1fr;
-    height: calc(100vh - 73px);
-    padding: 0;
-    gap: 0;
-    align-items: start;
-    overflow: hidden;
-}
-
-#view-auth.active {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr;
-    height: calc(100vh - 73px);
-    padding: 0;
-    gap: 0;
-}
-
-#view-register.active,
-#view-register-emp.active,
-#view-verify.active {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr;
-    height: calc(100vh - 73px);
-    padding: 0;
-    gap: 0;
-}
 @media (min-width: 768px) {
     body {
         display: block !important;
@@ -1150,5 +1091,48 @@ select option { background: var(--surface-2); }
         height: 100vh !important;
         display: flex !important;
         flex-direction: column !important;
+    }
+
+    .view { display: none !important; }
+
+    #view-auth.active {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr;
+        height: calc(100vh - 73px);
+        padding: 0;
+        gap: 0;
+        flex: 1;
+    }
+
+    #view-register.active,
+    #view-register-emp.active,
+    #view-verify.active {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr;
+        height: calc(100vh - 73px);
+        padding: 0;
+        gap: 0;
+    }
+
+    #view-manager.active {
+        display: grid !important;
+        grid-template-columns: 280px 1fr 1fr;
+        grid-template-rows: auto auto auto auto 1fr auto;
+        height: calc(100vh - 73px);
+        padding: 0;
+        gap: 0;
+        overflow: hidden;
+        align-items: start;
+    }
+
+    #view-employee.active {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: auto auto auto auto 1fr;
+        height: calc(100vh - 73px);
+        padding: 0;
+        gap: 0;
+        align-items: start;
+        overflow: hidden;
     }
 }

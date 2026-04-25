@@ -1098,3 +1098,42 @@ select option { background: var(--surface-2); }
 #view-employee.active {
     display: flex !important;
 }
+#view-manager.active {
+    display: grid !important;
+    grid-template-columns: 280px 1fr 1fr;
+    grid-template-rows: auto auto auto auto 1fr auto;
+    height: calc(100vh - 73px);
+    padding: 0;
+    gap: 0;
+    overflow: hidden;
+    align-items: start;
+}
+
+#view-employee.active {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto auto auto 1fr;
+    height: calc(100vh - 73px);
+    padding: 0;
+    gap: 0;
+    align-items: start;
+    overflow: hidden;
+}
+
+#view-auth.active {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    height: calc(100vh - 73px);
+    padding: 0;
+    gap: 0;
+}
+
+#view-register.active,
+#view-register-emp.active,
+#view-verify.active {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    height: calc(100vh - 73px);
+    padding: 0;
+    gap: 0;
+}

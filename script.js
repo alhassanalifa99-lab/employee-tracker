@@ -140,170 +140,24 @@ class HRApp {
         }
     }
 
-    // Setup Supabase Auth State Listener for Magic Link Flow
-    setupAuthStateListener() {
-        supabase.auth.onAuthStateChange(async (event, session) => {
-            console.log('Auth state changed:', event, session);
+    // Setup Supabase Auth State Listener
+    // NOTE: Primary registration flow uses 6-digit OTP codes (verified in verifyAccount() method).
+    // This listener is kept as a fallback for any other auth state changes or future enhancements.
+ setupAuthStateListener() {
+    supabase.auth.onAuthStateChange(async (event, session) => {
+        console.log('Auth state changed:', event, session);
 
-            // Only handle the magic link verification callback event
-            if (event === 'SIGNED_IN' && session && session.user) {
-                const authUser = session.user;
-                console.log('User signed in via magic link:', authUser.email);
-
-               // Get or use pending registration data
-                if (!this.pendingRegistration) {
-                    console.log('No pending registration found, retrieving from storage if available');
-                    const storedPending = localStorage.getItem('hrapp_pending_registration');
-                    if (storedPending) {
-                        this.pendingRegistration = JSON.parse(storedPending);
-                        console.log('Restored pending registration:', this.pendingRegistration);
-                     }
-                }
-
-                if (!this.pendingRegistration || (!this.pendingRegistration.type)) {
-                    console.log('No pending registration found for auto-creation');
-                    return;
-                }
-
-                // Handle Manager Registration via Magic Link
-                if (this.pendingRegistration.type === 'manager') {
-                    try {
-                        // Query the database directly to check if manager exists (more reliable than cache)
-                        const { data: existingManagerData, error: queryError } = await supabase
-                            .from('managers')
-                            .select('*')
-                            .eq('username', this.pendingRegistration.username)
-                            .maybeSingle();
-
-                        if (queryError) {
-                            console.error('Error querying managers table:', queryError);
-                            throw queryError;
-                        }
-
-                        if (existingManagerData) {
-                            console.log('Manager already exists in database, logging in...');
-                            // User already exists, just log them in
-                            this.currentUser = { username: this.pendingRegistration.username, ...existingManagerData };
-                            localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
-                            this.clearPendingRegistration();
-                            this.showView('view-manager');
-                            this.refreshDashboard();
-                            this.showToast('✅ Welcome back! You have been automatically logged in.', 'success');
-                        } else {
-                            console.log('Manager does not exist yet, creating from pending registration...');
-                            // Manager doesn't exist, create their record using pending registration data from localStorage
-                            const managerData = this.pendingRegistration.managerData || {};
-                            managerData.verified = true;
-                            
-                            await this.saveManager(
-                                this.pendingRegistration.username,
-                                managerData
-                            );
-
-                            // Create trial subscription for the new company
-                            await this.createTrialSubscription(this.pendingRegistration.companyId);
-                            console.log('Manager record created successfully');
-
-                            // Fetch the newly created manager record from Supabase
-                            const { data: newManagerData, error: fetchError } = await supabase
-                                .from('managers')
-                                .select('*')
-                                .eq('username', this.pendingRegistration.username)
-                                .maybeSingle();
-
-                            if (fetchError) {
-                                console.error('Error fetching newly created manager:', fetchError);
-                                throw fetchError;
-                            }
-
-                            // Log them in automatically
-                            this.currentUser = { username: this.pendingRegistration.username, ...newManagerData };
-                            localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
-                            this.clearPendingRegistration();
-
-                            // Update the in-memory cache
-                            this.managers[this.pendingRegistration.username] = newManagerData;
-
-                            // Show success and redirect to dashboard
-                            this.showView('view-manager');
-                            this.refreshDashboard();
-                            this.showToast(`✅ Account verified and created! Welcome to your dashboard.`, 'success');
-                        }
-                    } catch (error) {
-                        console.error('Error during manager magic link flow:', error);
-                        this.showToast('❌ Failed to complete account setup: ' + error.message, 'error');
-                    }
-                }
-                // Handle Employee Registration via Magic Link
-                else if (this.pendingRegistration.type === 'employee') {
-                    try {
-                        // Query the database directly to check if employee exists (more reliable than cache)
-                        const { data: existingEmployeeData, error: queryError } = await supabase
-                            .from('employees')
-                            .select('*')
-                            .eq('username', this.pendingRegistration.username)
-                            .maybeSingle();
-
-                        if (queryError) {
-                            console.error('Error querying employees table:', queryError);
-                            throw queryError;
-                        }
-
-                        if (existingEmployeeData) {
-                            console.log('Employee already exists in database, logging in...');
-                            // User already exists, just log them in
-                            this.currentUser = { username: this.pendingRegistration.username, ...existingEmployeeData };
-                            localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
-                            this.clearPendingRegistration();
-                            this.showView('view-employee');
-                            this.refreshDashboard();
-                            this.showToast('✅ Welcome back! You have been automatically logged in.', 'success');
-                        } else {
-                            console.log('Employee does not exist yet, creating from pending registration...');
-                            // Employee doesn't exist, create their record using pending registration data from localStorage
-                            const employeeData = this.pendingRegistration.employeeData || {};
-                            employeeData.verified = true;
-                            
-                            await this.saveEmployee(
-                                this.pendingRegistration.username,
-                                employeeData
-                            );
-
-                            console.log('Employee record created successfully');
-
-                            // Fetch the newly created employee record from Supabase
-                            const { data: newEmployeeData, error: fetchError } = await supabase
-                                .from('employees')
-                                .select('*')
-                                .eq('username', this.pendingRegistration.username)
-                                .maybeSingle();
-
-                            if (fetchError) {
-                                console.error('Error fetching newly created employee:', fetchError);
-                                throw fetchError;
-                            }
-
-                            // Log them in automatically
-                            this.currentUser = { username: this.pendingRegistration.username, ...newEmployeeData };
-                            localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
-                            this.clearPendingRegistration();
-
-                            // Update the in-memory cache
-                            this.employees[this.pendingRegistration.username] = newEmployeeData;
-
-                            // Show success and redirect to dashboard
-                            this.showView('view-employee');
-                            this.refreshDashboard();
-                            this.showToast(`✅ Account verified and created! Welcome to your dashboard.`, 'success');
-                        }
-                    } catch (error) {
-                        console.error('Error during employee magic link flow:', error);
-                        this.showToast('❌ Failed to complete account setup: ' + error.message, 'error');
-                    }
-                }
+        // Only act on SIGNED_IN if OTP was explicitly just verified
+        // Prevents auto-login on page refresh
+        if (event === 'SIGNED_IN' && session && session.user) {
+            if (!this._otpJustVerified) {
+                console.log('Ignoring auto SIGNED_IN on page load');
+                return;
             }
-        });
-    }
+            this._otpJustVerified = false;
+        }
+    });
+}
 
     // Helper: Clear pending registration data
     clearPendingRegistration() {
@@ -459,8 +313,8 @@ class HRApp {
             console.log('Creating trial subscription:', subscriptionData);
             
             const { data, error } = await supabase
-                .from('subscriptions')
-                .insert(subscriptionData);
+    .from('subscriptions')
+    .upsert(subscriptionData, { onConflict: 'company_id' });
             
             if (error) {
                 console.error('Error creating trial subscription:', error);
@@ -674,12 +528,11 @@ class HRApp {
             const companyId = companyIdInput || (companyName.substring(0, 4) + Math.floor(1000 + Math.random() * 9000)).toUpperCase();
 
             console.log('registerNewCompany: Sending OTP to email', managerEmail);
-            // Send OTP via Supabase Auth
+            // Send OTP via Supabase Auth (6-digit code will be sent to email)
             const { data, error } = await supabase.auth.signInWithOtp({
                 email: managerEmail,
                 options: {
-                    shouldCreateUser: true, // Allow new users to receive OTP
-                    emailRedirectTo: 'https://employee-tracker-sooty.vercel.app'
+                    shouldCreateUser: true // Allow new users to receive OTP
                 }
             });
 
@@ -692,12 +545,12 @@ class HRApp {
 
             // Store pending registration data with ALL required fields
             this.pendingRegistration = {
-                email: managerEmail,
-                username: managerName,
-                type: 'manager',
-                companyId: companyId,
-                companyName: companyName,
-                managerData: {
+    email: managerEmail,
+    username: managerName,
+    type: 'manager',
+    company_id: companyId,       // ← fixed
+    company_name: companyName,   // ← fixed
+    managerData: {
                     company_id: companyId,
                     password: managerPassword,
                     role: 'manager',
@@ -707,10 +560,10 @@ class HRApp {
                 }
             };
 
-            // Persist to localStorage so it survives the redirect from magic link
+            // Persist to localStorage for account creation after OTP verification
             localStorage.setItem('hrapp_pending_registration', JSON.stringify(this.pendingRegistration));
 
-            this.showToast(`✉️ OTP sent to ${managerEmail}. Check your inbox!`, 'success');
+            this.showToast(`✉️ 6-digit OTP sent to ${managerEmail}. Check your inbox!`, 'success');
             this.showView('view-verify');
         } catch (error) {
             console.error('Error sending OTP:', error);
@@ -742,18 +595,14 @@ class HRApp {
         }
 
         try {
-            // Send OTP via Supabase Auth
-            const { data, error } = await supabase.auth.signInWithOtp({
-                email: email,
-                options: {
-                    shouldCreateUser: false, // Don't auto-create user yet
-                    emailRedirectTo: 'https://employee-tracker-sooty.vercel.app'
-                }
-            });
-
-            if (error) {
-                throw error;
-            }
+            // Send OTP via Supabase Auth (6-digit code will be sent to email)
+  const { data, error } = await supabase.auth.signInWithOtp({
+    email: email,
+    options: {
+        shouldCreateUser: true,
+        emailRedirectTo: null  // Disable magic link, force 6-digit OTP only
+    }
+});
 
             // Store pending registration data
             this.pendingRegistration = {
@@ -771,10 +620,10 @@ class HRApp {
                 }
             };
 
-            // Persist to localStorage so it survives the redirect from magic link
+            // Persist to localStorage for account creation after OTP verification
             localStorage.setItem('hrapp_pending_registration', JSON.stringify(this.pendingRegistration));
 
-            this.showToast(`✉️ OTP sent to ${email}. Check your inbox!`, 'success');
+            this.showToast(`✉️ 6-digit OTP sent to ${email}. Check your inbox!`, 'success');
             this.showView('view-verify');
         } catch (error) {
             console.error('Error sending OTP:', error);
@@ -794,14 +643,17 @@ class HRApp {
             return alert("Please enter the verification code");
         }
 
-        try {
+        
+        
+            try {
             console.log('verifyAccount: Verifying OTP for email:', this.pendingRegistration.email);
-            // Verify OTP with Supabase Auth
-            const { data, error } = await supabase.auth.verifyOtp({
-                email: this.pendingRegistration.email,
-                token: codeInput,
-                type: 'email'
-            });
+            this._otpJustVerified = true;
+            
+         const { data, error } = await supabase.auth.verifyOtp({
+            email: this.pendingRegistration.email,
+            token: codeInput,
+            type: 'email'
+          });
 
             if (error) {
                 console.error('verifyAccount: Error verifying OTP', error);
@@ -816,10 +668,11 @@ class HRApp {
                 await this.saveManager(this.pendingRegistration.username, this.pendingRegistration.managerData);
                 
                 // Create trial subscription for the new company
-                await this.createTrialSubscription(this.pendingRegistration.companyId);
-                
+               await this.createTrialSubscription(this.pendingRegistration.company_id);
+
+            
                 alert("✅ Email Verified Successfully!");
-                alert(`🎉 Company "${this.pendingRegistration.companyName}" Created!\n\nCompany ID: ${this.pendingRegistration.companyId}\n\nRedirecting to your dashboard...`);
+                alert(`🎉 Company "${this.pendingRegistration.company_name}" Created!\n\nCompany ID: ${this.pendingRegistration.company_id}\n\nRedirecting to your dashboard...`);
                 
                 // Log the user in immediately
                 const user = this.managers[this.pendingRegistration.username];

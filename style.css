@@ -1078,3 +1078,23 @@ select option { background: var(--surface-2); }
         pointer-events: none;
     }
 }
+/* ═══════════════════════════════════════
+   NUCLEAR OVERRIDE - FIXES VIEW BLEED
+═══════════════════════════════════════ */
+#view-auth,
+#view-verify,
+#view-register,
+#view-register-emp,
+#view-manager,
+#view-employee {
+    display: none !important;
+}
+ 
+#view-auth.active,
+#view-verify.active,
+#view-register.active,
+#view-register-emp.active,
+#view-manager.active,
+#view-employee.active {
+    display: flex !important;
+}

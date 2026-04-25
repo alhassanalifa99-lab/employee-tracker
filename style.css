@@ -1149,3 +1149,28 @@ select option { background: var(--surface-2); }
         overflow-y: visible;
     }
 }
+@media (min-width: 768px) {
+
+    .view { display: none !important; }
+    .view.active { display: grid !important; }
+
+    #view-register-emp,
+    #view-register,
+    #view-verify { display: none !important; }
+
+    #view-register-emp.active,
+    #view-register.active,
+    #view-verify.active { display: grid !important; }
+@media (min-width: 768px) {
+    #view-register-emp,
+    #view-register,
+    #view-verify {
+        display: none;
+    }
+
+    #view-register-emp.active,
+    #view-register.active,
+    #view-verify.active {
+        display: grid;
+    }
+}

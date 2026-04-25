@@ -529,13 +529,13 @@ class HRApp {
 
             console.log('registerNewCompany: Sending OTP to email', managerEmail);
             // Send OTP via Supabase Auth (6-digit code will be sent to email)
-            const { data, error } = await supabase.auth.signInWithOtp({
-                email: managerEmail,
-                options: {
-                    shouldCreateUser: true // Allow new users to receive OTP
-                }
-            });
-
+           const { data, error } = await supabase.auth.signInWithOtp({
+    email: managerEmail,
+    options: {
+        shouldCreateUser: true,
+        emailRedirectTo: null  // Disable magic link, force 6-digit OTP only
+    }
+});
             if (error) {
                 console.error('registerNewCompany: Error sending OTP', error);
                 throw error;

@@ -27,10 +27,16 @@
     <!-- ── AUTH VIEW ── -->
     <div id="view-auth" class="view active">
 
-        <div class="auth-hero">
-            <p class="auth-hero-title">Track your<br>team <em>in real time.</em></p>
-            <p class="auth-hero-sub">Geofenced check-ins. Instant visibility.</p>
-        </div>
+      <div class="auth-hero">
+    <p class="auth-hero-title">Track your<br>team <em>in real time.</em></p>
+    <p class="auth-hero-sub">Geofenced check-ins. Instant visibility.</p>
+    <div class="auth-hero-features">
+        <div class="auth-feature"><span class="auth-feature-dot"></span>50m geofence radius enforcement</div>
+        <div class="auth-feature"><span class="auth-feature-dot"></span>Real-time check-in dashboard</div>
+        <div class="auth-feature"><span class="auth-feature-dot"></span>Multi-site team management</div>
+        <div class="auth-feature"><span class="auth-feature-dot"></span>Instant activity logs</div>
+    </div>
+</div>
 
         <div class="card">
             <div id="auth-gps-status" class="gps-pill waiting">
@@ -68,55 +74,54 @@
         </div>
     </div>
 
-    <!-- ── VERIFY VIEW ── -->
-    <div id="view-verify" class="view">
-        <div class="card" style="text-align:center;">
-            <div class="verify-icon">✉️</div>
-            <h2 style="justify-content:center; margin-bottom:8px;">Check your inbox</h2>
-            <p style="color:var(--text-muted); font-size:0.88rem; margin-bottom:24px; line-height:1.6;">
-                We sent a 6-digit code to your email.<br>Enter it below to verify your account.
-            </p>
-            <div class="form-group">
-                <input type="text" id="verify-code" class="otp-input" placeholder="000000"
-                    maxlength="6" inputmode="numeric" autocomplete="one-time-code">
-            </div>
-            <button class="btn btn-primary" onclick="app.verifyAccount()">Verify & Continue</button>
-            <button class="btn btn-outline" style="margin-top:10px;" onclick="app.showView('view-auth')">Cancel</button>
+ <!-- ── VERIFY VIEW ── -->
+<div id="view-verify" class="view" data-title="VERIFY EMAIL">
+    <div class="card" style="text-align:center;">
+        <div class="verify-icon">✉️</div>
+        <h2 style="justify-content:center; margin-bottom:8px;">Check your inbox</h2>
+        <p style="color:var(--text-muted); font-size:0.88rem; margin-bottom:24px; line-height:1.6;">
+            We sent a 6-digit code to your email.<br>Enter it below to verify your account.
+        </p>
+        <div class="form-group">
+            <input type="text" id="verify-code" class="otp-input" placeholder="000000"
+                maxlength="6" inputmode="numeric" autocomplete="one-time-code">
         </div>
+        <button class="btn btn-primary" onclick="app.verifyAccount()">Verify & Continue</button>
+        <button class="btn btn-outline" style="margin-top:10px;" onclick="app.showView('view-auth')">Cancel</button>
     </div>
+</div>
 
-    <!-- ── REGISTER COMPANY VIEW ── -->
-    <div id="view-register" class="view">
-        <div class="card">
-            <h2><span class="h2-icon">🏢</span> Create Workspace</h2>
-            <div class="form-group">
-                <label>Company Name</label>
-                <input type="text" id="reg-company-name" placeholder="e.g. Acme Corp">
-            </div>
-            <div class="form-group">
-                <label>Company ID <span style="color:var(--amber)">*</span></label>
-                <input type="text" id="reg-company-id" placeholder="e.g. ACME-GH" style="font-family:'Syne',sans-serif; font-weight:600; letter-spacing:1px;">
-                <small style="color:var(--text-muted); display:block; margin-top:6px; font-size:0.75rem;">Letters, numbers, hyphens only. Employees use this to log in.</small>
-            </div>
-            <div class="form-group">
-                <label>Manager Username</label>
-                <input type="text" id="reg-manager-name" placeholder="Choose a username">
-            </div>
-            <div class="form-group">
-                <label>Manager Email</label>
-                <input type="email" id="reg-manager-email" placeholder="your@email.com">
-            </div>
-            <div class="form-group">
-                <label>Password</label>
-                <input type="password" id="reg-manager-password" placeholder="Create a strong password">
-            </div>
-            <button class="btn btn-primary" onclick="app.registerNewCompany()">Create Account →</button>
-            <button class="btn btn-outline" style="margin-top:10px;" onclick="app.showView('view-auth')">← Back</button>
+<!-- ── REGISTER COMPANY VIEW ── -->
+<div id="view-register" class="view" data-title="CREATE WORKSPACE">
+    <div class="card">
+        <h2><span class="h2-icon">🏢</span> Create Workspace</h2>
+        <div class="form-group">
+            <label>Company Name</label>
+            <input type="text" id="reg-company-name" placeholder="e.g. Acme Corp">
         </div>
+        <div class="form-group">
+            <label>Company ID <span style="color:var(--amber)">*</span></label>
+            <input type="text" id="reg-company-id" placeholder="e.g. ACME-GH" style="font-family:'Syne',sans-serif; font-weight:600; letter-spacing:1px;">
+            <small style="color:var(--text-muted); display:block; margin-top:6px; font-size:0.75rem;">Letters, numbers, hyphens only. Employees use this to log in.</small>
+        </div>
+        <div class="form-group">
+            <label>Manager Username</label>
+            <input type="text" id="reg-manager-name" placeholder="Choose a username">
+        </div>
+        <div class="form-group">
+            <label>Manager Email</label>
+            <input type="email" id="reg-manager-email" placeholder="your@email.com">
+        </div>
+        <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="reg-manager-password" placeholder="Create a strong password">
+        </div>
+        <button class="btn btn-primary" onclick="app.registerNewCompany()">Create Account →</button>
+        <button class="btn btn-outline" style="margin-top:10px;" onclick="app.showView('view-auth')">← Back</button>
     </div>
-
+</div>
     <!-- ── REGISTER EMPLOYEE VIEW ── -->
-    <div id="view-register-emp" class="view">
+     <div id="view-register" class="view" data-title="CREATE WORKSPACE"></div>
         <div class="card">
             <h2><span class="h2-icon">👤</span> Employee Signup</h2>
             <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:20px; line-height:1.6;">

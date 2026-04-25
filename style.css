@@ -752,9 +752,11 @@ select option { background: var(--surface-2); }
 
     .view { display: none !important; }
 
+    /* ── AUTH ── */
     #view-auth.active {
         display: grid !important;
         grid-template-columns: 1fr 1fr;
+        grid-template-rows: 1fr;
         flex: 1;
         padding: 0;
         gap: 0;
@@ -764,7 +766,7 @@ select option { background: var(--surface-2); }
 
     .auth-hero {
         grid-column: 1;
-        grid-row: 1 / -1;
+        grid-row: 1;
         display: flex;
         flex-direction: column;
         justify-content: center;
@@ -809,30 +811,21 @@ select option { background: var(--surface-2); }
         display: flex;
         flex-direction: column;
         justify-content: center;
-        padding: 64px 56px;
+        padding: 48px 56px;
         overflow-y: auto;
         background: var(--surface);
     }
 
-    #view-auth .divider {
-        grid-column: 2;
-        grid-row: 2;
-        padding: 0 56px;
-        align-self: center;
-    }
+    #view-auth .divider { margin: 16px 0; }
+    #view-auth .register-grid { margin-top: 8px; }
 
-    #view-auth .register-grid {
-        grid-column: 2;
-        grid-row: 3;
-        padding: 0 56px 48px;
-        align-self: start;
-    }
-
+    /* ── REGISTER / VERIFY ── */
     #view-register.active,
     #view-register-emp.active,
     #view-verify.active {
         display: grid !important;
         grid-template-columns: 1fr 1fr;
+        grid-template-rows: 1fr;
         flex: 1;
         padding: 0;
         gap: 0;
@@ -844,10 +837,11 @@ select option { background: var(--surface-2); }
     #view-register-emp .card,
     #view-verify .card {
         grid-column: 2;
+        grid-row: 1;
         border-radius: 0;
         border: none;
         border-left: 1px solid var(--border);
-        padding: 64px 56px;
+        padding: 48px 56px;
         overflow-y: auto;
         display: flex;
         flex-direction: column;
@@ -860,6 +854,7 @@ select option { background: var(--surface-2); }
     #view-verify::before {
         content: attr(data-title);
         grid-column: 1;
+        grid-row: 1;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -873,6 +868,7 @@ select option { background: var(--surface-2); }
         border-right: 1px solid var(--border);
     }
 
+    /* ── MANAGER DASHBOARD ── */
     #view-manager.active {
         display: grid !important;
         grid-template-columns: 280px 1fr 1fr;
@@ -962,6 +958,7 @@ select option { background: var(--surface-2); }
         margin: 0; padding: 12px 20px;
     }
 
+    /* ── EMPLOYEE DASHBOARD ── */
     #view-employee.active {
         display: grid !important;
         grid-template-columns: 1fr 1fr;

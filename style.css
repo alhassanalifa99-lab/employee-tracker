@@ -47,7 +47,6 @@ body {
     position: relative;
 }
 
-/* Subtle grid texture */
 body::before {
     content: '';
     position: fixed;
@@ -60,7 +59,6 @@ body::before {
     z-index: 0;
 }
 
-/* Glowing orb */
 body::after {
     content: '';
     position: fixed;
@@ -82,7 +80,6 @@ body::after {
     z-index: 1;
 }
 
-/* ─── HEADER ─── */
 .app-header {
     padding: 40px 24px 24px;
     display: flex;
@@ -129,11 +126,8 @@ body::after {
     letter-spacing: -0.3px;
 }
 
-.app-title span {
-    color: var(--green);
-}
+.app-title span { color: var(--green); }
 
-/* ─── VIEWS ─── */
 .view {
     display: none;
     flex-direction: column;
@@ -149,7 +143,6 @@ body::after {
     to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ─── CARDS ─── */
 .card {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -173,10 +166,7 @@ body::after {
 .card:hover::before { opacity: 1; }
 .card:hover { border-color: var(--border-hover); }
 
-/* Card accent stripe */
-.card-accent {
-    border-left: 3px solid var(--green);
-}
+.card-accent { border-left: 3px solid var(--green); }
 
 h2 {
     font-family: 'Syne', sans-serif;
@@ -202,7 +192,6 @@ h2 .h2-icon {
     border: 1px solid rgba(0,232,122,0.2);
 }
 
-/* ─── HERO SECTION (Auth) ─── */
 .auth-hero {
     padding: 8px 0 20px;
     text-align: center;
@@ -229,10 +218,7 @@ h2 .h2-icon {
     font-weight: 300;
 }
 
-/* ─── FORMS ─── */
-.form-group {
-    margin-bottom: 16px;
-}
+.form-group { margin-bottom: 16px; }
 
 label {
     display: block;
@@ -267,7 +253,6 @@ input:focus, select:focus {
 
 select option { background: var(--surface-2); }
 
-/* ─── BUTTONS ─── */
 .btn {
     width: 100%;
     padding: 15px 20px;
@@ -322,9 +307,7 @@ select option { background: var(--surface-2); }
     box-shadow: 0 4px 20px rgba(255,71,87,0.3);
 }
 
-.btn-danger:hover {
-    box-shadow: 0 6px 28px rgba(255,71,87,0.45);
-}
+.btn-danger:hover { box-shadow: 0 6px 28px rgba(255,71,87,0.45); }
 
 .btn-sm {
     width: auto;
@@ -332,7 +315,6 @@ select option { background: var(--surface-2); }
     font-size: 0.78rem;
 }
 
-/* ─── DIVIDER ─── */
 .divider {
     display: flex;
     align-items: center;
@@ -352,7 +334,6 @@ select option { background: var(--surface-2); }
     color: var(--text-muted);
 }
 
-/* ─── REGISTER BUTTONS ─── */
 .register-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -378,9 +359,7 @@ select option { background: var(--surface-2); }
     gap: 6px;
 }
 
-.register-btn .reg-icon {
-    font-size: 1.4rem;
-}
+.register-btn .reg-icon { font-size: 1.4rem; }
 
 .register-btn:hover {
     border-color: var(--green);
@@ -390,7 +369,6 @@ select option { background: var(--surface-2); }
 
 .register-btn:active { transform: scale(0.97); }
 
-/* ─── GPS STATUS ─── */
 .gps-pill {
     display: flex;
     align-items: center;
@@ -446,9 +424,8 @@ select option { background: var(--surface-2); }
     font-weight: 600;
 }
 
-/* ─── COORDS ─── */
 .coordinates-display {
-    font-family: 'DM Mono', monospace;
+    font-family: monospace;
     font-size: 0.8rem;
     color: var(--text-muted);
     padding: 10px 14px;
@@ -457,7 +434,6 @@ select option { background: var(--surface-2); }
     border: 1px solid var(--border);
 }
 
-/* ─── STATUS INDICATOR (Employee) ─── */
 .status-indicator {
     padding: 36px 24px;
     border-radius: var(--radius);
@@ -501,7 +477,6 @@ select option { background: var(--surface-2); }
     color: var(--green);
 }
 
-/* ─── SITE ITEMS ─── */
 .site-item {
     padding: 14px 16px;
     background: var(--surface-2);
@@ -516,7 +491,6 @@ select option { background: var(--surface-2); }
 
 .site-item:hover { border-color: var(--border-hover); }
 
-/* ─── TEAM MEMBERS ─── */
 .team-member-item {
     padding: 14px 16px;
     background: var(--surface-2);
@@ -546,7 +520,6 @@ select option { background: var(--surface-2); }
 
 .team-member-status-icon { font-size: 1.1rem; }
 
-/* ─── SITE STATUS GROUP ─── */
 .site-status-group { margin-bottom: 20px; }
 
 .site-header {
@@ -564,7 +537,6 @@ select option { background: var(--surface-2); }
     gap: 6px;
 }
 
-/* ─── LOGS TABLE ─── */
 .logs-table {
     width: 100%;
     border-collapse: collapse;
@@ -596,7 +568,6 @@ select option { background: var(--surface-2); }
     font-size: 0.85rem;
 }
 
-/* ─── OTP INPUT ─── */
 .otp-input {
     text-align: center;
     letter-spacing: 12px;
@@ -606,7 +577,6 @@ select option { background: var(--surface-2); }
     padding: 18px !important;
 }
 
-/* ─── VERIFY HERO ─── */
 .verify-icon {
     width: 72px;
     height: 72px;
@@ -620,7 +590,6 @@ select option { background: var(--surface-2); }
     margin: 0 auto 20px;
 }
 
-/* ─── TOAST ─── */
 #toast-container {
     position: fixed;
     top: 16px;
@@ -660,7 +629,6 @@ select option { background: var(--surface-2); }
     to { opacity: 1; transform: translateX(0); }
 }
 
-/* ─── DEBUG ─── */
 .debug-controls {
     margin-top: 8px;
     padding: 14px;
@@ -671,6 +639,7 @@ select option { background: var(--surface-2); }
 }
 
 .debug-controls:hover { opacity: 1; }
+
 .debug-title {
     font-size: 0.72rem;
     color: var(--text-muted);
@@ -679,7 +648,6 @@ select option { background: var(--surface-2); }
     letter-spacing: 0.8px;
 }
 
-/* ─── UTILITY ─── */
 .text-center { text-align: center; }
 .text-small  { font-size: 0.82rem; }
 .t-success   { color: var(--green); }
@@ -721,7 +689,6 @@ select option { background: var(--surface-2); }
     font-family: 'Syne', sans-serif;
 }
 
-/* ─── SECTION LABEL ─── */
 .section-label {
     font-size: 0.72rem;
     font-weight: 600;
@@ -732,7 +699,6 @@ select option { background: var(--surface-2); }
     margin-top: 4px;
 }
 
-/* ─── BADGE ─── */
 .badge {
     display: inline-flex;
     align-items: center;
@@ -747,29 +713,19 @@ select option { background: var(--surface-2); }
 .badge-red   { background: var(--red-dim);   color: var(--red);   border: 1px solid rgba(255,71,87,0.25); }
 .badge-amber { background: var(--amber-dim); color: var(--amber); border: 1px solid rgba(255,184,0,0.25); }
 
-/* ─── SCROLLBAR ─── */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-
-/* ─── DESKTOP ─── */
-@media (min-width: 500px) {
-    body { padding-top: 32px; align-items: flex-start; }
-    .app-container {
-        border: 1px solid var(--border);
-        border-radius: var(--radius-lg);
-        overflow: hidden;
-        max-height: 92vh;
-        overflow-y: auto;
-        box-shadow: 0 24px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,232,122,0.05);
-    }
-}
 
 /* ═══════════════════════════════════════
    DESKTOP LAYOUT (768px+)
 ═══════════════════════════════════════ */
 
 @media (min-width: 768px) {
+
+    /* Force all views hidden, only .active shows */
+    .view { display: none !important; }
+    .view.active { display: grid !important; }
 
     body {
         padding: 0;
@@ -778,9 +734,7 @@ select option { background: var(--surface-2); }
         height: 100vh;
     }
 
-    body::before {
-        background-size: 64px 64px;
-    }
+    body::before { background-size: 64px 64px; }
 
     .app-container {
         max-width: 100%;
@@ -794,9 +748,9 @@ select option { background: var(--surface-2); }
         border-radius: 0;
         border: none;
         overflow: hidden;
+        max-height: none;
     }
 
-    /* ── Desktop Header ── */
     .app-header {
         padding: 20px 40px;
         border-bottom: 1px solid var(--border);
@@ -811,13 +765,11 @@ select option { background: var(--surface-2); }
         z-index: 100;
     }
 
-    .app-title {
-        font-size: 1.1rem;
-    }
+    .app-title { font-size: 1.1rem; }
 
-    /* ── Auth View — Two Column ── */
+    /* Auth View */
     #view-auth.active {
-        display: grid;
+        display: grid !important;
         grid-template-columns: 1fr 1fr;
         grid-template-rows: 1fr;
         height: calc(100vh - 73px);
@@ -837,15 +789,8 @@ select option { background: var(--surface-2); }
         text-align: left;
     }
 
-    .auth-hero-title {
-        font-size: 3.8rem;
-        margin-bottom: 16px;
-    }
-
-    .auth-hero-sub {
-        font-size: 1rem;
-        margin-bottom: 48px;
-    }
+    .auth-hero-title { font-size: 3.8rem; margin-bottom: 16px; }
+    .auth-hero-sub { font-size: 1rem; margin-bottom: 48px; }
 
     .auth-hero-features {
         display: flex;
@@ -862,15 +807,13 @@ select option { background: var(--surface-2); }
     }
 
     .auth-feature-dot {
-        width: 8px;
-        height: 8px;
+        width: 8px; height: 8px;
         border-radius: 50%;
         background: var(--green);
         flex-shrink: 0;
         box-shadow: 0 0 8px var(--green-glow);
     }
 
-    /* Auth form panel */
     #view-auth .card {
         grid-column: 2;
         grid-row: 1;
@@ -899,11 +842,11 @@ select option { background: var(--surface-2); }
         align-self: start;
     }
 
-    /* ── Register / Verify Views ── */
+    /* Register / Verify Views */
     #view-register.active,
     #view-register-emp.active,
     #view-verify.active {
-        display: grid;
+        display: grid !important;
         grid-template-columns: 1fr 1fr;
         height: calc(100vh - 73px);
         padding: 0;
@@ -944,9 +887,9 @@ select option { background: var(--surface-2); }
         border-right: 1px solid var(--border);
     }
 
-    /* ── Manager Dashboard ── */
+    /* Manager Dashboard */
     #view-manager.active {
-        display: grid;
+        display: grid !important;
         grid-template-columns: 280px 1fr 1fr;
         grid-template-rows: auto auto auto auto 1fr auto;
         height: calc(100vh - 73px);
@@ -956,7 +899,6 @@ select option { background: var(--surface-2); }
         align-items: start;
     }
 
-    /* Sidebar */
     #view-manager .section-label:nth-of-type(1) {
         grid-column: 1;
         grid-row: 1;
@@ -964,7 +906,7 @@ select option { background: var(--surface-2); }
         border-right: 1px solid var(--border);
     }
 
-    #view-manager .card:nth-of-type(1) { /* Team Overview */
+    #view-manager .card:nth-of-type(1) {
         grid-column: 2 / 4;
         grid-row: 1;
         border-radius: 0;
@@ -974,7 +916,7 @@ select option { background: var(--surface-2); }
         overflow-y: auto;
     }
 
-    #view-manager .section-label:nth-of-type(2) { /* Activity label */
+    #view-manager .section-label:nth-of-type(2) {
         grid-column: 2;
         grid-row: 2;
         padding: 20px 24px 8px;
@@ -982,7 +924,7 @@ select option { background: var(--surface-2); }
         border-right: 1px solid var(--border);
     }
 
-    #view-manager .card:nth-of-type(2) { /* Recent Activity */
+    #view-manager .card:nth-of-type(2) {
         grid-column: 2;
         grid-row: 3 / 6;
         border-radius: 0;
@@ -992,15 +934,14 @@ select option { background: var(--surface-2); }
         align-self: stretch;
     }
 
-    /* Right column — sites + team */
-    #view-manager .section-label:nth-of-type(3) { /* Worksites label */
+    #view-manager .section-label:nth-of-type(3) {
         grid-column: 3;
         grid-row: 2;
         padding: 20px 24px 8px;
         border-bottom: 1px solid var(--border);
     }
 
-    #view-manager .card:nth-of-type(3) { /* Manage Sites */
+    #view-manager .card:nth-of-type(3) {
         grid-column: 3;
         grid-row: 3;
         border-radius: 0;
@@ -1009,7 +950,6 @@ select option { background: var(--surface-2); }
         overflow-y: auto;
     }
 
-    /* Sidebar — nav items */
     #view-manager .section-label:nth-of-type(4),
     #view-manager .section-label:nth-of-type(5) {
         grid-column: 1;
@@ -1017,7 +957,7 @@ select option { background: var(--surface-2); }
         padding: 16px 24px 6px;
     }
 
-    #view-manager .card:nth-of-type(4) { /* Add Employee */
+    #view-manager .card:nth-of-type(4) {
         grid-column: 1;
         grid-row: 2 / 4;
         border-radius: 0;
@@ -1028,7 +968,7 @@ select option { background: var(--surface-2); }
         padding: 20px;
     }
 
-    #view-manager .card:nth-of-type(5) { /* My Team */
+    #view-manager .card:nth-of-type(5) {
         grid-column: 3;
         grid-row: 4 / 6;
         border-radius: 0;
@@ -1059,9 +999,9 @@ select option { background: var(--surface-2); }
         padding: 12px 20px;
     }
 
-    /* ── Employee Dashboard ── */
+    /* Employee Dashboard */
     #view-employee.active {
-        display: grid;
+        display: grid !important;
         grid-template-columns: 1fr 1fr;
         grid-template-rows: auto auto auto auto 1fr;
         height: calc(100vh - 73px);
@@ -1102,9 +1042,7 @@ select option { background: var(--surface-2); }
         gap: 10px;
     }
 
-    #view-employee #emp-actions .btn {
-        width: 100%;
-    }
+    #view-employee #emp-actions .btn { width: 100%; }
 
     #view-employee .btn.btn-outline:not(.btn-sm) {
         grid-column: 1;
@@ -1126,7 +1064,6 @@ select option { background: var(--surface-2); }
         align-self: end;
     }
 
-    /* Right panel — decorative / info */
     #view-employee::after {
         content: 'ET';
         grid-column: 2;
@@ -1141,36 +1078,5 @@ select option { background: var(--surface-2); }
         opacity: 0.04;
         letter-spacing: -8px;
         pointer-events: none;
-    }
-
-    /* Remove mobile-only max-height from desktop */
-    .app-container {
-        max-height: none;
-        overflow-y: visible;
-    }
-}
-@media (min-width: 768px) {
-
-    .view { display: none !important; }
-    .view.active { display: grid !important; }
-
-    #view-register-emp,
-    #view-register,
-    #view-verify { display: none !important; }
-
-    #view-register-emp.active,
-    #view-register.active,
-    #view-verify.active { display: grid !important; }
-@media (min-width: 768px) {
-    #view-register-emp,
-    #view-register,
-    #view-verify {
-        display: none;
-    }
-
-    #view-register-emp.active,
-    #view-register.active,
-    #view-verify.active {
-        display: grid;
     }
 }

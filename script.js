@@ -48,9 +48,6 @@ class HRApp {
             // Load initial data from Supabase
             await this.loadAllData();
 
-            // Setup real-time subscriptions for instant updates
-            this.setupRealtimeSubscriptions();
-
             // Setup Supabase auth state listener for magic link redirect flow
             this.setupAuthStateListener();
 

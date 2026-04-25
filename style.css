@@ -724,7 +724,7 @@ select option { background: var(--surface-2); }
 
     /* Force all views hidden, only .active shows */
     .view { display: none !important; }
-    .view.active { display: grid !important; }
+    .view.active { display: flex !important; }
 
     body {
         padding: 0;

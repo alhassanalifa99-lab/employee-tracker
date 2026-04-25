@@ -910,17 +910,60 @@ class HRApp {
         }
     }
 
-    // --- View Management ---
+   // --- View Management ---
 
-    showView(viewId) {
-        document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
-        const el = document.getElementById(viewId);
-        if (!el) {
-            console.warn('showView: element not found', viewId);
-            return;
-        }
-        el.classList.add('active');
+showView(viewId) {
+    document.querySelectorAll('.view').forEach(el => {
+        el.classList.remove('active');
+        el.style.display = 'none';
+    });
+    const el = document.getElementById(viewId);
+    if (!el) {
+        console.warn('showView: element not found', viewId);
+        return;
     }
+    el.classList.add('active');
+
+    const isDesktop = window.innerWidth >= 768;
+
+    if (isDesktop) {
+        if (viewId === 'view-manager') {
+            el.style.display = 'grid';
+            el.style.gridTemplateColumns = '280px 1fr 1fr';
+            el.style.height = 'calc(100vh - 73px)';
+            el.style.padding = '0';
+            el.style.gap = '0';
+            el.style.overflow = 'hidden';
+            el.style.alignItems = 'start';
+        } else if (viewId === 'view-employee') {
+            el.style.display = 'grid';
+            el.style.gridTemplateColumns = '1fr 1fr';
+            el.style.height = 'calc(100vh - 73px)';
+            el.style.padding = '0';
+            el.style.gap = '0';
+            el.style.alignItems = 'start';
+            el.style.overflow = 'hidden';
+        } else if (viewId === 'view-auth') {
+            el.style.display = 'grid';
+            el.style.gridTemplateColumns = '1fr 1fr';
+            el.style.height = 'calc(100vh - 73px)';
+            el.style.padding = '0';
+            el.style.gap = '0';
+        } else {
+            el.style.display = 'grid';
+            el.style.gridTemplateColumns = '1fr 1fr';
+            el.style.height = 'calc(100vh - 73px)';
+            el.style.padding = '0';
+            el.style.gap = '0';
+        }
+    } else {
+        el.style.display = 'flex';
+        el.style.flexDirection = 'column';
+        el.style.gap = '12px';
+        el.style.padding = '0 16px';
+        el.style.height = '';
+    }
+}
 
     updateUIWithLocation() {
         if (!this.currentPosition) return;

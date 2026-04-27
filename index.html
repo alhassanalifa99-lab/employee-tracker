@@ -244,6 +244,14 @@
         <div id="emp-actions">
             <button id="btn-checkin" class="btn btn-primary" onclick="app.checkIn()">✅ Check In</button>
             <button id="btn-checkout" class="btn btn-danger" onclick="app.checkOut()" style="display:none;">🛑 Check Out</button>
+            <button id="btn-toggle-reason" type="button" class="btn btn-outline text-small" onclick="app.toggleCheckoutReason()">📝 Add reason for leaving</button>
+        </div>
+
+        <div id="checkout-reason-panel" class="checkout-reason-panel">
+            <div class="form-group">
+                <label for="checkout-reason">Reason for leaving site</label>
+                <textarea id="checkout-reason" rows="3" placeholder="Optional note for your manager..." autocomplete="off"></textarea>
+            </div>
         </div>
 
         <button class="btn btn-outline" onclick="app.logout()">Sign Out</button>

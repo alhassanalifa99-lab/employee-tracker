@@ -518,6 +518,24 @@ select option { background: var(--surface-2); }
 }
 
 .team-member-status-icon { font-size: 1.1rem; }
+.checkout-reason-panel {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.25s ease;
+}
+.checkout-reason-panel.expanded { max-height: 240px; }
+.checkout-reason-panel textarea {
+    width: 100%;
+    min-height: 90px;
+    resize: vertical;
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.95rem;
+}
 .site-status-group { margin-bottom: 20px; }
 
 .site-header {
@@ -802,19 +820,19 @@ select option { background: var(--surface-2); }
         box-shadow: 0 0 8px var(--green-glow);
     }
 
-    #view-auth .card {
-        grid-column: 2;
-        grid-row: 1;
-        border-radius: 0;
-        border: none;
-        border-left: 1px solid var(--border);
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        padding: 48px 56px;
-        overflow-y: auto;
-        background: var(--surface);
-    }
+   #view-auth .card {
+    grid-column: 2;
+    grid-row: 1;
+    border-radius: 0;
+    border: none;
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding: 40px 56px;
+    overflow-y: auto;
+    background: var(--surface);
+}
 
     #view-auth .divider { margin: 16px 0; }
     #view-auth .register-grid { margin-top: 8px; }
@@ -915,10 +933,11 @@ select option { background: var(--surface-2); }
     }
 
     #view-manager .card:nth-of-type(3) {
-        grid-column: 3; grid-row: 3;
+        grid-column: 3; grid-row: 3 / 5;
         border-radius: 0; border: none;
         border-bottom: 1px solid var(--border);
         overflow-y: auto;
+        min-height: 240px;
     }
 
     #view-manager .section-label:nth-of-type(4),
@@ -942,12 +961,15 @@ select option { background: var(--surface-2); }
         overflow-y: auto; align-self: stretch;
     }
 
-    #view-manager .btn.btn-outline:not(.btn-sm) {
-        grid-column: 1; grid-row: 5;
-        border-radius: 0; border: none;
-        border-top: 1px solid var(--border);
-        border-right: 1px solid var(--border);
-        align-self: end; margin: 0;
+  #view-manager .btn.btn-outline:not(.btn-sm) {
+     grid-column: 1; grid-row: 6;
+    border-radius: 0; border: none;
+    border-top: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    align-self: end; margin: 0;
+    z-index: 10;
+    position: relative;
+}
     }
 
     #view-manager .debug-controls {

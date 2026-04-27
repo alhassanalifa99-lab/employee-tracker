@@ -1204,10 +1204,38 @@ if (statusEl) {
         }
     }
 
-    async checkOut(reason = "Check-Out") {
+    toggleCheckoutReason() {
+        const panel = document.getElementById('checkout-reason-panel');
+        const button = document.getElementById('btn-toggle-reason');
+        if (!panel) return;
+
+        const expanded = panel.classList.toggle('expanded');
+        if (expanded) {
+            panel.style.maxHeight = panel.scrollHeight + 'px';
+            if (button) button.innerText = 'Hide reason for leaving';
+        } else {
+            panel.style.maxHeight = '0';
+            if (button) button.innerText = '📝 Add reason for leaving';
+        }
+    }
+
+    collapseCheckoutReason() {
+        const panel = document.getElementById('checkout-reason-panel');
+        const button = document.getElementById('btn-toggle-reason');
+        if (!panel) return;
+        panel.classList.remove('expanded');
+        panel.style.maxHeight = '0';
+        if (button) button.innerText = '📝 Add reason for leaving';
+    }
+
+    async checkOut(reason = null) {
         if (!this.currentUser) return;
         const user = this.employees[this.currentUser.username];
         if (!user) return;
+
+        const reasonInput = document.getElementById('checkout-reason');
+        const customReason = reasonInput?.value?.trim();
+        const action = reason || (customReason ? `Site Exit • ${customReason}` : 'Check-Out');
 
         try {
             // Update employee status in Supabase
@@ -1224,11 +1252,13 @@ if (statusEl) {
             await this.saveCheckin({
                 username: this.currentUser.username,
                 company_id: this.currentUser.company_id,
-                action: reason,
+                action,
                 time: new Date().toLocaleTimeString(),
                 site_id: null
             });
 
+            if (reasonInput) reasonInput.value = '';
+            this.collapseCheckoutReason();
             this.refreshDashboard();
         } catch (error) {
             console.error('Error checking out:', error);
@@ -1396,6 +1426,7 @@ if (statusEl) {
             if (btnCheckout) btnCheckout.style.display = isCheckedIn ? 'block' : 'none';
             if (empTimer) empTimer.style.display = isCheckedIn ? 'block' : 'none';
 
+            if (!isCheckedIn) this.collapseCheckoutReason();
             if (isCheckedIn) this.startTimer(user.check_in_time);
             else if (this.timerInterval) clearInterval(this.timerInterval);
 

@@ -1527,15 +1527,29 @@ if (statusEl) {
         return d * 1000; // Distance in meters
     }
 
-    deg2rad(deg) {
-        return deg * (Math.PI / 180)
+   deg2rad(deg) {
+        return deg * (Math.PI / 180);
     }
-}
+
+   togglePanel(bodyId, iconId) {
+        const el = document.getElementById(bodyId);
+        const icon = document.getElementById(iconId);
+        if (!el || !icon) return;
+        if (el.style.display === 'none') {
+            el.style.display = 'block';
+            icon.textContent = '−';
+        } else {
+            el.style.display = 'none';
+            icon.textContent = '+';
+        }
+    }
+
+} // ← ONE closing brace for HRApp class
 
 // Initialize with Error Handling
 try {
     const app = new HRApp();
-    window.app = app; // Expose for HTML onclick handlers
+    window.app = app;
     console.log("App Initialized Successfully");
 } catch (e) {
     alert("❌ STARTUP FAILED:\n" + e.message);

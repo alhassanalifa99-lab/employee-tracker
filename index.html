@@ -148,82 +148,91 @@
     </div>
 </div>
 
-    <!-- ── MANAGER DASHBOARD ── -->
-    <div id="view-manager" class="view">
+   <!-- ── MANAGER DASHBOARD ── -->
+<div id="view-manager" class="view">
 
-        <!-- Live Team Status -->
-        <p class="section-label">Live Status</p>
-        <div class="card card-accent">
-            <h2><span class="h2-icon">📊</span> Team Overview</h2>
+    <!-- Live Team Status -->
+    <p class="section-label">Live Status</p>
+    <div class="card card-accent">
+        <h2 style="cursor:pointer; justify-content:space-between;" onclick="const el=document.getElementById('team-body'); const icon=document.getElementById('team-icon'); if(el.style.display==='none'){el.style.display='block';icon.textContent='−';}else{el.style.display='none';icon.textContent='+';}">
+            <span><span class="h2-icon">📊</span> Team Overview</span>
+            <span id="team-icon" style="font-size:1.2rem; color:var(--text-muted);">−</span>
+        </h2>
+        <div id="team-body">
             <div id="team-status-display">
                 <p style="color:var(--text-muted); font-size:0.85rem;">No employees assigned yet.</p>
             </div>
         </div>
+    </div>
 
-        <!-- Activity Logs -->
-        <p class="section-label">Activity</p>
-        <div class="card">
-            <h2><span class="h2-icon">🕐</span> Recent Activity</h2>
+    <!-- Activity Logs -->
+    <p class="section-label">Activity</p>
+    <div class="card">
+     <h2 style="cursor:pointer; justify-content:space-between;" onclick="app.togglePanel('team-body','team-icon')"></h2>
+            <span><span class="h2-icon">🕐</span> Recent Activity</span>
+            <span id="activity-icon" style="font-size:1.2rem; color:var(--text-muted);">−</span>
+        </h2>
+        <div id="activity-body">
             <div id="employee-list">
                 <p style="color:var(--text-muted); font-size:0.85rem;">No activity yet.</p>
             </div>
         </div>
+    </div>
 
-        <!-- Sites -->
-        <p class="section-label">Worksites</p>
-        <div class="card">
-            <h2><span class="h2-icon">📍</span> Manage Sites</h2>
-            <div class="form-group">
-                <label>New Worksite Name</label>
-                <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:8px;">GPS must be active to set location.</p>
-                <input type="text" id="new-site-name" placeholder="e.g. Headquarters">
-            </div>
-            <div id="manager-coords" class="coordinates-display" style="margin-bottom:12px;">📍 Waiting for GPS...</div>
-            <button class="btn btn-primary" onclick="app.createSite()">Set Location & Create</button>
-            <div id="site-list-display" style="margin-top:16px;"></div>
+    <!-- Sites -->
+    <p class="section-label">Worksites</p>
+    <div class="card">
+        <h2><span class="h2-icon">📍</span> Manage Sites</h2>
+        <div class="form-group">
+            <label>New Worksite Name</label>
+            <input type="text" id="new-site-name" placeholder="e.g. Headquarters">
         </div>
+        <div id="manager-coords" class="coordinates-display" style="margin-bottom:12px;">📍 Waiting for GPS...</div>
+        <button class="btn btn-primary" onclick="app.createSite()">Set Location & Create</button>
+        <div id="site-list-display" style="margin-top:16px;"></div>
+    </div>
 
-        <!-- Team Management -->
-        <p class="section-label">Team</p>
-        <div class="card">
-            <h2><span class="h2-icon">➕</span> Add / Link Employee</h2>
-            <div class="form-group">
-                <label>Assigned Worksite</label>
-                <select id="new-emp-site">
-                    <option value="" disabled selected>Select Worksite</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Employee Username</label>
-                <input type="text" id="new-emp-username" placeholder="Existing username">
-            </div>
-            <div class="form-group">
-                <label>Contact (Email or Phone)</label>
-                <input type="text" id="new-emp-contact" placeholder="Email or Phone">
-            </div>
-            <div class="form-group">
-                <label>Passcode (optional)</label>
-                <input type="text" id="new-emp-passcode" placeholder="Login PIN" maxlength="6">
-            </div>
-            <button class="btn btn-primary" onclick="app.registerEmployee()">Link Employee</button>
+    <!-- Team Management -->
+    <p class="section-label">Team</p>
+    <div class="card">
+        <h2><span class="h2-icon">➕</span> Add / Link Employee</h2>
+        <div class="form-group">
+            <label>Assigned Worksite</label>
+            <select id="new-emp-site">
+                <option value="" disabled selected>Select Worksite</option>
+            </select>
         </div>
-
-        <div class="card">
-            <h2><span class="h2-icon">👥</span> My Team</h2>
-            <div id="team-list-container">
-                <p style="color:var(--text-muted); font-size:0.85rem; text-align:center;">No employees yet.</p>
-            </div>
+        <div class="form-group">
+            <label>Employee Username</label>
+            <input type="text" id="new-emp-username" placeholder="Existing username">
         </div>
+        <div class="form-group">
+            <label>Contact (Email or Phone)</label>
+            <input type="text" id="new-emp-contact" placeholder="Email or Phone">
+        </div>
+        <div class="form-group">
+            <label>Passcode (optional)</label>
+            <input type="text" id="new-emp-passcode" placeholder="Login PIN" maxlength="6">
+        </div>
+        <button class="btn btn-primary" onclick="app.registerEmployee()">Link Employee</button>
+    </div>
 
-        <button class="btn btn-outline" onclick="app.logout()" style="margin-top:4px;">Sign Out</button>
-
-        <div class="debug-controls">
-            <div class="debug-title">🚧 Dev Tools</div>
-            <button class="btn btn-outline btn-sm" onclick="if(window.app&&app.currentPosition){app.debugSetLocation(app.currentPosition.lat+0.005,app.currentPosition.lng);}else{alert('No position');}">
-                🚀 Teleport Away (Test Geofence)
-            </button>
+    <div class="card">
+        <h2><span class="h2-icon">👥</span> My Team</h2>
+        <div id="team-list-container">
+            <p style="color:var(--text-muted); font-size:0.85rem; text-align:center;">No employees yet.</p>
         </div>
     </div>
+
+    <button class="btn btn-outline" onclick="app.logout()" style="margin-top:4px;">Sign Out</button>
+
+    <div class="debug-controls">
+        <div class="debug-title">🚧 Dev Tools</div>
+        <button class="btn btn-outline btn-sm" onclick="if(window.app&&app.currentPosition){app.debugSetLocation(app.currentPosition.lat+0.005,app.currentPosition.lng);}else{alert('No position');}">
+            🚀 Teleport Away (Test Geofence)
+        </button>
+    </div>
+</div>
 
     <!-- ── EMPLOYEE DASHBOARD ── -->
     <div id="view-employee" class="view">

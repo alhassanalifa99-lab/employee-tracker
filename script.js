@@ -20,6 +20,7 @@ class HRApp {
         this.companies = {};
         this.logs = {};
         this.subscriptions = {};
+        this.BIOMETRIC_STORAGE_KEY = 'hrapp_biometric_credentials';
 
         try {
             this.initAsync();
@@ -33,6 +34,7 @@ class HRApp {
             this.watchLocation();
             await this.loadAllData();
             this.setupAuthStateListener();
+            this.setupAuthInputListeners();
 
             const storedUser = localStorage.getItem('hrapp_user');
             if (storedUser) {
@@ -46,6 +48,7 @@ class HRApp {
                 }
             } else {
                 this.showView('view-auth');
+                this.updateBiometricLoginButton();
             }
         } catch (error) {
             console.error('Error in initAsync:', error);
@@ -110,6 +113,97 @@ class HRApp {
         this.pendingRegistration = null;
         this.pendingUser = null;
         localStorage.removeItem('hrapp_pending_registration');
+    }
+
+    async hashString(input) {
+        const encoded = new TextEncoder().encode(input);
+        const digest = await crypto.subtle.digest('SHA-256', encoded);
+        return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    async generateDeviceFingerprint() {
+        const nav = window.navigator;
+        const screenInfo = window.screen || {};
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown';
+        const fingerprintPayload = {
+            userAgent: nav.userAgent || '',
+            platform: nav.platform || '',
+            language: nav.language || '',
+            languages: (nav.languages || []).join(','),
+            hardwareConcurrency: nav.hardwareConcurrency || 0,
+            deviceMemory: nav.deviceMemory || 0,
+            maxTouchPoints: nav.maxTouchPoints || 0,
+            screen: `${screenInfo.width || 0}x${screenInfo.height || 0}x${screenInfo.colorDepth || 0}`,
+            timezone: tz
+        };
+        return this.hashString(JSON.stringify(fingerprintPayload));
+    }
+
+    getBiometricMap() {
+        try {
+            const raw = localStorage.getItem(this.BIOMETRIC_STORAGE_KEY);
+            return raw ? JSON.parse(raw) : {};
+        } catch (error) {
+            console.warn('Failed to read biometric storage:', error);
+            return {};
+        }
+    }
+
+    setBiometricMap(nextMap) {
+        localStorage.setItem(this.BIOMETRIC_STORAGE_KEY, JSON.stringify(nextMap));
+    }
+
+    getBiometricKey(username, companyId, fingerprint) {
+        return `${username}::${companyId || 'nocompany'}::${fingerprint || 'nofp'}`;
+    }
+
+    arrayBufferToBase64(buffer) {
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        bytes.forEach(byte => { binary += String.fromCharCode(byte); });
+        return btoa(binary);
+    }
+
+    base64ToArrayBuffer(base64) {
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+        return bytes.buffer;
+    }
+
+    async updateBiometricLoginButton() {
+        const biometricBtn = document.getElementById('auth-biometric-btn');
+        if (!biometricBtn) return;
+
+        const username = document.getElementById('auth-username')?.value?.trim()?.toLowerCase();
+        const companyId = document.getElementById('auth-company')?.value?.trim()?.toUpperCase();
+        if (!username) {
+            biometricBtn.style.display = 'none';
+            return;
+        }
+
+        const user = this.managers[username] || this.employees[username];
+        if (!user || user.role !== 'employee' || !user.company_id || (companyId && user.company_id !== companyId)) {
+            biometricBtn.style.display = 'none';
+            return;
+        }
+
+        if (!window.PublicKeyCredential) {
+            biometricBtn.style.display = 'none';
+            return;
+        }
+
+        const fingerprint = await this.generateDeviceFingerprint();
+        const biometricMap = this.getBiometricMap();
+        const key = this.getBiometricKey(username, user.company_id, fingerprint);
+        biometricBtn.style.display = biometricMap[key]?.credentialId ? 'block' : 'none';
+    }
+
+    setupAuthInputListeners() {
+        const usernameField = document.getElementById('auth-username');
+        const companyField = document.getElementById('auth-company');
+        if (usernameField) usernameField.addEventListener('input', () => { this.updateBiometricLoginButton(); });
+        if (companyField) companyField.addEventListener('input', () => { this.updateBiometricLoginButton(); });
     }
 
     async loadAllData() {
@@ -388,7 +482,7 @@ class HRApp {
         }
     }
 
-    login() {
+    async login() {
         const usernameInput = document.getElementById('auth-username');
         const companyInput = document.getElementById('auth-company');
         const username = usernameInput.value.trim().toLowerCase();
@@ -426,6 +520,16 @@ class HRApp {
         if (!user.company_id) return alert(`You are not linked to a company yet.\nAsk your Manager to register you using username: "${username}".`);
 
         if (user.role === 'employee') {
+            const currentFingerprint = await this.generateDeviceFingerprint();
+            if (user.device_fingerprint && user.device_fingerprint !== currentFingerprint) {
+                return alert('🚫 Device mismatch detected.\n\nThis account is locked to another device.\nPlease contact your manager to reset your device binding.');
+            }
+            if (!user.device_fingerprint) {
+                user.device_fingerprint = currentFingerprint;
+                user.device_bound_at = new Date().toISOString();
+                await this.saveEmployee(username, user);
+            }
+
             if (!this.currentPosition) {
                 alert("📍 DETECTING LOCATION...\n\nPlease allow GPS access and wait a moment.");
                 navigator.geolocation.getCurrentPosition(
@@ -450,11 +554,145 @@ class HRApp {
         this.refreshDashboard();
     }
 
+    async loginWithBiometrics() {
+        const usernameInput = document.getElementById('auth-username');
+        const companyInput = document.getElementById('auth-company');
+        const username = usernameInput?.value?.trim()?.toLowerCase();
+        let companyId = companyInput?.value?.trim()?.toUpperCase();
+        if (!username) return alert('Enter your username first.');
+
+        const user = this.employees[username];
+        if (!user) return alert('Biometric login is available for employees only.');
+        if (!companyId) {
+            companyId = user.company_id || '';
+            if (companyInput && companyId) companyInput.value = companyId;
+        }
+        if (!companyId || user.company_id !== companyId) return alert('Enter a valid company ID for this account.');
+
+        if (!window.PublicKeyCredential || !navigator.credentials) {
+            return alert('Biometrics are not supported on this browser/device.');
+        }
+
+        const fingerprint = await this.generateDeviceFingerprint();
+        if (user.device_fingerprint && user.device_fingerprint !== fingerprint) {
+            return alert('🚫 Device mismatch detected.\n\nThis account is locked to another device.\nPlease contact your manager to reset your device binding.');
+        }
+        const biometricMap = this.getBiometricMap();
+        const biometricKey = this.getBiometricKey(username, user.company_id, fingerprint);
+        const savedCredential = biometricMap[biometricKey];
+        if (!savedCredential?.credentialId) {
+            return alert('Biometrics are not enabled on this device for this account.');
+        }
+
+        try {
+            const challenge = crypto.getRandomValues(new Uint8Array(32));
+            await navigator.credentials.get({
+                publicKey: {
+                    challenge,
+                    timeout: 60000,
+                    userVerification: 'required',
+                    allowCredentials: [{
+                        id: this.base64ToArrayBuffer(savedCredential.credentialId),
+                        type: 'public-key'
+                    }]
+                }
+            });
+            this.currentUser = { username, ...user };
+            localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
+            this.setupRealtimeSubscriptions();
+            this.showView('view-employee');
+            this.refreshDashboard();
+        } catch (error) {
+            console.error('Biometric login failed:', error);
+            alert('Biometric verification failed. You can still log in with passcode/password.');
+        }
+    }
+
+    async enableBiometrics() {
+        if (!this.currentUser || this.currentUser.role !== 'employee') return;
+        if (!window.PublicKeyCredential || !navigator.credentials) {
+            return alert('Biometrics are not supported on this browser/device.');
+        }
+
+        const employee = this.employees[this.currentUser.username];
+        if (!employee) return alert('Employee profile not found.');
+
+        try {
+            const fingerprint = await this.generateDeviceFingerprint();
+            if (employee.device_fingerprint && employee.device_fingerprint !== fingerprint) {
+                return alert('This device is not the bound login device. Contact your manager to reset binding.');
+            }
+            if (!employee.device_fingerprint) {
+                employee.device_fingerprint = fingerprint;
+                employee.device_bound_at = new Date().toISOString();
+            }
+
+            const challenge = crypto.getRandomValues(new Uint8Array(32));
+            const userId = new TextEncoder().encode(`${employee.company_id}:${this.currentUser.username}`);
+            const credential = await navigator.credentials.create({
+                publicKey: {
+                    challenge,
+                    rp: { name: 'Employee Tracker' },
+                    user: {
+                        id: userId,
+                        name: this.currentUser.username,
+                        displayName: this.currentUser.username
+                    },
+                    pubKeyCredParams: [
+                        { type: 'public-key', alg: -7 },
+                        { type: 'public-key', alg: -257 }
+                    ],
+                    authenticatorSelection: { userVerification: 'required' },
+                    timeout: 60000,
+                    attestation: 'none'
+                }
+            });
+
+            if (!credential || !credential.rawId) return alert('Biometric setup failed.');
+
+            const biometricMap = this.getBiometricMap();
+            const biometricKey = this.getBiometricKey(this.currentUser.username, employee.company_id, fingerprint);
+            biometricMap[biometricKey] = { credentialId: this.arrayBufferToBase64(credential.rawId) };
+            this.setBiometricMap(biometricMap);
+
+            employee.biometric_enabled = true;
+            await this.saveEmployee(this.currentUser.username, employee);
+            this.currentUser = { ...this.currentUser, ...employee };
+            localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
+            this.refreshDashboard();
+            this.updateBiometricLoginButton();
+            alert('✅ Biometrics enabled. You can now use biometric sign in on this device.');
+        } catch (error) {
+            console.error('Failed to enable biometrics:', error);
+            alert('Could not enable biometrics: ' + error.message);
+        }
+    }
+
+    async disableBiometrics() {
+        if (!this.currentUser || this.currentUser.role !== 'employee') return;
+        const employee = this.employees[this.currentUser.username];
+        if (!employee) return;
+        const fingerprint = await this.generateDeviceFingerprint();
+        const biometricMap = this.getBiometricMap();
+        const biometricKey = this.getBiometricKey(this.currentUser.username, employee.company_id, fingerprint);
+        delete biometricMap[biometricKey];
+        this.setBiometricMap(biometricMap);
+
+        employee.biometric_enabled = false;
+        await this.saveEmployee(this.currentUser.username, employee);
+        this.currentUser = { ...this.currentUser, ...employee };
+        localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
+        this.refreshDashboard();
+        this.updateBiometricLoginButton();
+        alert('Biometric sign in disabled for this device.');
+    }
+
     logout() {
         this.currentUser = null;
         this.clearPendingRegistration();
         localStorage.removeItem('hrapp_user');
         this.showView('view-auth');
+        this.updateBiometricLoginButton();
         if (this.timerInterval) clearInterval(this.timerInterval);
         if (this.subscriptions.employees) supabase.removeChannel(this.subscriptions.employees);
         if (this.subscriptions.checkins) supabase.removeChannel(this.subscriptions.checkins);
@@ -524,8 +762,9 @@ class HRApp {
         if (!site || !this.currentPosition) return;
         const dist = this.getDistanceFromLatLonInMeters(this.currentPosition.lat, this.currentPosition.lng, site.lat, site.lng);
         if (dist > this.MAX_DISTANCE_METERS) {
-            alert(`⚠️ GEOCONFIG ALERT\n\nYou have left the worksite boundary (${Math.round(dist)}m).\n\nYour shift has been PAUSED (Auto Check-Out).`);
+            alert(`⚠️ GEOCONFIG ALERT\n\nYou have left the worksite boundary (${Math.round(dist)}m).\n\nYou have been automatically logged out.`);
             await this.checkOut("Geofence Exit");
+            this.logout();
         }
     }
 
@@ -540,7 +779,7 @@ class HRApp {
         const isDesktop = window.innerWidth >= 768;
         if (isDesktop) {
             if (viewId === 'view-manager') {
-                el.style.display = 'grid'; el.style.gridTemplateColumns = '280px 1fr 1fr';
+                el.style.display = 'grid'; el.style.gridTemplateColumns = '280px 1fr 1fr'; el.style.gridTemplateRows = 'auto auto auto auto 1fr auto';
                 el.style.height = 'calc(100vh - 73px)'; el.style.padding = '0';
                 el.style.gap = '0'; el.style.overflow = 'hidden'; el.style.alignItems = 'start';
             } else if (viewId === 'view-employee') {
@@ -555,6 +794,8 @@ class HRApp {
             el.style.display = 'flex'; el.style.flexDirection = 'column';
             el.style.gap = '12px'; el.style.padding = '0 16px'; el.style.height = '';
         }
+
+        if (viewId === 'view-auth') this.updateBiometricLoginButton();
     }
 
     updateUIWithLocation() {
@@ -645,6 +886,23 @@ class HRApp {
         } catch (error) { alert('Failed to remove employee: ' + error.message); }
     }
 
+    async resetEmployeeDeviceBinding(username) {
+        if (!confirm(`Reset device binding for "${username}"?\nThey will need to sign in again on a new device.`)) return;
+        const employee = this.employees[username];
+        if (!employee) return alert('Employee not found.');
+
+        try {
+            employee.device_fingerprint = null;
+            employee.device_bound_at = null;
+            employee.biometric_enabled = false;
+            await this.saveEmployee(username, employee);
+            this.refreshDashboard();
+            alert(`Device binding reset for ${username}.`);
+        } catch (error) {
+            alert('Failed to reset device binding: ' + error.message);
+        }
+    }
+
     // --- Employee Features ---
 
     async checkIn() {
@@ -662,7 +920,23 @@ class HRApp {
             await this.saveEmployee(this.currentUser.username, user);
             this.trackLocation(site.id);
             if (this.trackingInterval) clearInterval(this.trackingInterval);
-            this.trackingInterval = setInterval(() => this.trackLocation(site.id), 300000);
+        this.trackingInterval = setInterval(() => {
+    // Force fresh GPS before geofence check
+    navigator.geolocation.getCurrentPosition(
+        (pos) => {
+            this.currentPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            this.updateUIWithLocation();
+            this.trackLocation(site.id);
+            if (this.currentUser) this.monitorGeofence();
+        },
+        (err) => {
+            console.error('GPS update failed:', err);
+            // Still check with last known position
+            if (this.currentUser) this.monitorGeofence();
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+}, 30000);
             await this.saveCheckin({ username: this.currentUser.username, company_id: this.currentUser.company_id, action: `Check-In @ ${site.name}`, time: new Date().toLocaleTimeString(), site_id: site.id });
             this.refreshDashboard();
         } catch (error) { alert('Failed to check in: ' + error.message); }
@@ -776,14 +1050,18 @@ class HRApp {
                 teamList.innerHTML = companyEmployees.length > 0
                     ? companyEmployees.map(emp => {
                         const siteName = company.sites.find(s => String(s.id) === String(emp.assigned_site_id))?.name || 'Unknown Site';
+                        const hasDeviceBinding = !!emp.device_fingerprint;
                         return `
                         <div class="team-member-item" style="flex-direction:column; align-items:stretch; gap:8px;">
                             <div style="display:flex; justify-content:space-between; align-items:center;">
                                 <div style="cursor:pointer;" onclick="app.toggleEmployeeHistory('${emp.username}')">
                                     <div class="team-member-name">${emp.username}</div>
-                                    <div class="text-sub">@ ${siteName} — tap to view history</div>
+                                    <div class="text-sub">@ ${siteName} — ${hasDeviceBinding ? 'Device bound' : 'No device bound'} — tap to view history</div>
                                 </div>
-                                <button onclick="app.removeEmployee('${emp.username}')" class="btn-danger btn-sm">🗑️</button>
+                                <div style="display:flex; gap:6px;">
+                                    <button onclick="app.resetEmployeeDeviceBinding('${emp.username}')" class="btn-outline btn-sm">Reset Device</button>
+                                    <button onclick="app.removeEmployee('${emp.username}')" class="btn-danger btn-sm">🗑️</button>
+                                </div>
                             </div>
                             <div id="history-${emp.username}" style="display:none; background:var(--surface-2); border-radius:var(--radius-sm); padding:12px; font-size:0.82rem; color:var(--text-muted);">
                                 Loading...
@@ -814,6 +1092,19 @@ class HRApp {
             if (statusText && statusIcon && empBox) {
                 if (isCheckedIn) { statusText.innerText = "Checked In"; statusIcon.innerText = "✅"; empBox.style.background = "rgba(40, 167, 69, 0.2)"; }
                 else { statusText.innerText = "Checked Out"; statusIcon.innerText = "🛑"; empBox.style.background = "rgba(255, 77, 77, 0.1)"; }
+            }
+
+            const biometricBtn = document.getElementById('btn-enable-biometrics');
+            const biometricStatus = document.getElementById('biometric-status');
+            if (biometricBtn && biometricStatus) {
+                const supported = !!window.PublicKeyCredential;
+                const enabled = !!user.biometric_enabled;
+                biometricBtn.style.display = supported ? 'block' : 'none';
+                biometricBtn.innerText = enabled ? 'Disable Biometrics' : 'Enable Biometrics';
+                biometricBtn.onclick = () => enabled ? this.disableBiometrics() : this.enableBiometrics();
+                biometricStatus.innerText = supported
+                    ? (enabled ? 'Biometric sign in enabled on this device.' : 'Optional: enable biometric sign in for faster access.')
+                    : 'Biometric sign in is not supported on this device/browser.';
             }
         }
     }

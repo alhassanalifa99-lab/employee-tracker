@@ -518,12 +518,15 @@ select option { background: var(--surface-2); }
 }
 
 .team-member-status-icon { font-size: 1.1rem; }
+
 .checkout-reason-panel {
     max-height: 0;
     overflow: hidden;
     transition: max-height 0.25s ease;
 }
+
 .checkout-reason-panel.expanded { max-height: 240px; }
+
 .checkout-reason-panel textarea {
     width: 100%;
     min-height: 90px;
@@ -536,6 +539,7 @@ select option { background: var(--surface-2); }
     font-family: 'DM Sans', sans-serif;
     font-size: 0.95rem;
 }
+
 .site-status-group { margin-bottom: 20px; }
 
 .site-header {
@@ -820,19 +824,19 @@ select option { background: var(--surface-2); }
         box-shadow: 0 0 8px var(--green-glow);
     }
 
-   #view-auth .card {
-    grid-column: 2;
-    grid-row: 1;
-    border-radius: 0;
-    border: none;
-    border-left: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
-    padding: 40px 56px;
-    overflow-y: auto;
-    background: var(--surface);
-}
+    #view-auth .card {
+        grid-column: 2;
+        grid-row: 1;
+        border-radius: 0;
+        border: none;
+        border-left: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        padding: 40px 56px;
+        overflow-y: auto;
+        background: var(--surface);
+    }
 
     #view-auth .divider { margin: 16px 0; }
     #view-auth .register-grid { margin-top: 8px; }
@@ -910,6 +914,7 @@ select option { background: var(--surface-2); }
         border-radius: 0; border: none;
         border-bottom: 1px solid var(--border);
         max-height: 260px; overflow-y: auto;
+        z-index: 5;
     }
 
     #view-manager .section-label:nth-of-type(2) {
@@ -924,6 +929,7 @@ select option { background: var(--surface-2); }
         border-radius: 0; border: none;
         border-right: 1px solid var(--border);
         overflow-y: auto; align-self: stretch;
+        z-index: 2;
     }
 
     #view-manager .section-label:nth-of-type(3) {
@@ -946,13 +952,14 @@ select option { background: var(--surface-2); }
         border-right: 1px solid var(--border);
         padding: 16px 24px 6px;
     }
-#view-manager .card:nth-of-type(4) {
-    grid-column: 1; grid-row: 2 / 6;
-    border-radius: 0; border: none;
-    border-right: 1px solid var(--border);
-    border-bottom: 1px solid var(--border);
-    overflow-y: auto; padding: 20px;
-}
+
+    #view-manager .card:nth-of-type(4) {
+        grid-column: 1; grid-row: 2 / 6;
+        border-radius: 0; border: none;
+        border-right: 1px solid var(--border);
+        border-bottom: 1px solid var(--border);
+        overflow-y: auto; padding: 20px;
+    }
 
     #view-manager .card:nth-of-type(5) {
         grid-column: 3; grid-row: 4 / 6;
@@ -960,22 +967,24 @@ select option { background: var(--surface-2); }
         overflow-y: auto; align-self: stretch;
     }
 
-  #view-manager .btn.btn-outline:not(.btn-sm) {
-     grid-column: 1; grid-row: 6;
-    border-radius: 0; border: none;
-    border-top: 1px solid var(--border);
-    border-right: 1px solid var(--border);
-    align-self: end; margin: 0;
-    z-index: 10;
-    position: relative;
+    #view-manager .btn.btn-outline:not(.btn-sm) {
+        grid-column: 1 / 4;
+        grid-row: 7;
+        border-radius: 0;
+        border: none;
+        border-top: 1px solid var(--border);
+        margin: 0;
+        align-self: end;
+        z-index: 10;
     }
 
-    #view-manager .debug-controls {
-        grid-column: 1; grid-row: 6;
+   #view-manager .debug-controls {
+    grid-column: 2 / 4; grid-row: 6;
         border-radius: 0; border: none;
         border-top: 1px solid var(--border);
         border-right: 1px solid var(--border);
         margin: 0; padding: 12px 20px;
+        align-self: end;
     }
 
     /* ── EMPLOYEE DASHBOARD ── */

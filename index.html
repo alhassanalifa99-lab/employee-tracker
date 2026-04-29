@@ -16,9 +16,7 @@
 
     <!-- Header -->
     <div class="app-header">
-        <div class="app-logo">
-            <span class="logo-text">ET</span>
-        </div>
+        <div class="app-logo"><span class="logo-text">ET</span></div>
         <h1 class="app-title">Employee <span>Tracker</span></h1>
     </div>
 
@@ -26,17 +24,16 @@
 
     <!-- ── AUTH VIEW ── -->
     <div id="view-auth" class="view active">
-
-      <div class="auth-hero">
-    <p class="auth-hero-title">Track your<br>team <em>in real time.</em></p>
-    <p class="auth-hero-sub">Geofenced check-ins. Instant visibility.</p>
-    <div class="auth-hero-features">
-        <div class="auth-feature"><span class="auth-feature-dot"></span>50m geofence radius enforcement</div>
-        <div class="auth-feature"><span class="auth-feature-dot"></span>Real-time check-in dashboard</div>
-        <div class="auth-feature"><span class="auth-feature-dot"></span>Multi-site team management</div>
-        <div class="auth-feature"><span class="auth-feature-dot"></span>Instant activity logs</div>
-    </div>
-</div>
+        <div class="auth-hero">
+            <p class="auth-hero-title">Track your<br>team <em>in real time.</em></p>
+            <p class="auth-hero-sub">Geofenced check-ins. Instant visibility.</p>
+            <div class="auth-hero-features">
+                <div class="auth-feature"><span class="auth-feature-dot"></span>50m geofence radius enforcement</div>
+                <div class="auth-feature"><span class="auth-feature-dot"></span>Real-time check-in dashboard</div>
+                <div class="auth-feature"><span class="auth-feature-dot"></span>Multi-site team management</div>
+                <div class="auth-feature"><span class="auth-feature-dot"></span>Instant activity logs</div>
+            </div>
+        </div>
 
         <div class="card">
             <div id="auth-gps-status" class="gps-pill waiting">
@@ -44,7 +41,6 @@
                 <span>Waiting for GPS signal...</span>
                 <button onclick="app.watchLocation()">RETRY</button>
             </div>
-
             <div class="form-group">
                 <label>Username</label>
                 <input type="text" id="auth-username" placeholder="your_username" autocomplete="username">
@@ -58,181 +54,180 @@
                 <input type="password" id="auth-passcode" placeholder="••••••" autocomplete="current-password">
             </div>
             <button class="btn btn-primary" onclick="app.login()">Sign In</button>
+            <button id="auth-biometric-btn" class="btn btn-outline" style="margin-top:10px; display:none;" onclick="app.loginWithBiometrics()">Use Biometrics</button>
         </div>
 
         <div class="divider"><span>New here?</span></div>
 
         <div class="register-grid">
             <button class="register-btn" onclick="app.showView('view-register-emp')">
-                <span class="reg-icon">👤</span>
-                Employee Signup
+                <span class="reg-icon">👤</span>Employee Signup
             </button>
             <button class="register-btn" onclick="app.showView('view-register')">
-                <span class="reg-icon">🏢</span>
-                Register Company
+                <span class="reg-icon">🏢</span>Register Company
             </button>
         </div>
     </div>
 
- <!-- ── VERIFY VIEW ── -->
-<div id="view-verify" class="view" data-title="VERIFY EMAIL">
-    <div class="card" style="text-align:center;">
-        <div class="verify-icon">✉️</div>
-        <h2 style="justify-content:center; margin-bottom:8px;">Check your inbox</h2>
-        <p style="color:var(--text-muted); font-size:0.88rem; margin-bottom:24px; line-height:1.6;">
-            We sent a 6-digit code to your email.<br>Enter it below to verify your account.
-        </p>
-        <div class="form-group">
-            <input type="text" id="verify-code" class="otp-input" placeholder="000000"
-                maxlength="6" inputmode="numeric" autocomplete="one-time-code">
+    <!-- ── VERIFY VIEW ── -->
+    <div id="view-verify" class="view" data-title="VERIFY EMAIL">
+        <div class="card" style="text-align:center;">
+            <div class="verify-icon">✉️</div>
+            <h2 style="justify-content:center; margin-bottom:8px;">Check your inbox</h2>
+            <p style="color:var(--text-muted); font-size:0.88rem; margin-bottom:24px; line-height:1.6;">
+                We sent a 6-digit code to your email.<br>Enter it below to verify your account.
+            </p>
+            <div class="form-group">
+                <input type="text" id="verify-code" class="otp-input" placeholder="000000" maxlength="6" inputmode="numeric" autocomplete="one-time-code">
+            </div>
+            <button class="btn btn-primary" onclick="app.verifyAccount()">Verify & Continue</button>
+            <button class="btn btn-outline" style="margin-top:10px;" onclick="app.showView('view-auth')">Cancel</button>
         </div>
-        <button class="btn btn-primary" onclick="app.verifyAccount()">Verify & Continue</button>
-        <button class="btn btn-outline" style="margin-top:10px;" onclick="app.showView('view-auth')">Cancel</button>
     </div>
-</div>
 
-<!-- ── REGISTER COMPANY VIEW ── -->
-<div id="view-register" class="view" data-title="CREATE WORKSPACE">
-    <div class="card">
-        <h2><span class="h2-icon">🏢</span> Create Workspace</h2>
-        <div class="form-group">
-            <label>Company Name</label>
-            <input type="text" id="reg-company-name" placeholder="e.g. Acme Corp">
+    <!-- ── REGISTER COMPANY VIEW ── -->
+    <div id="view-register" class="view" data-title="CREATE WORKSPACE">
+        <div class="card">
+            <h2><span class="h2-icon">🏢</span> Create Workspace</h2>
+            <div class="form-group">
+                <label>Company Name</label>
+                <input type="text" id="reg-company-name" placeholder="e.g. Acme Corp">
+            </div>
+            <div class="form-group">
+                <label>Company ID <span style="color:var(--amber)">*</span></label>
+                <input type="text" id="reg-company-id" placeholder="e.g. ACME-GH" style="font-family:'Syne',sans-serif; font-weight:600; letter-spacing:1px;">
+                <small style="color:var(--text-muted); display:block; margin-top:6px; font-size:0.75rem;">Letters, numbers, hyphens only. Employees use this to log in.</small>
+            </div>
+            <div class="form-group">
+                <label>Manager Username</label>
+                <input type="text" id="reg-manager-name" placeholder="Choose a username">
+            </div>
+            <div class="form-group">
+                <label>Manager Email</label>
+                <input type="email" id="reg-manager-email" placeholder="your@email.com">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="reg-manager-password" placeholder="Create a strong password">
+            </div>
+            <button class="btn btn-primary" onclick="app.registerNewCompany()">Create Account →</button>
+            <button class="btn btn-outline" style="margin-top:10px;" onclick="app.showView('view-auth')">← Back</button>
         </div>
-        <div class="form-group">
-            <label>Company ID <span style="color:var(--amber)">*</span></label>
-            <input type="text" id="reg-company-id" placeholder="e.g. ACME-GH" style="font-family:'Syne',sans-serif; font-weight:600; letter-spacing:1px;">
-            <small style="color:var(--text-muted); display:block; margin-top:6px; font-size:0.75rem;">Letters, numbers, hyphens only. Employees use this to log in.</small>
-        </div>
-        <div class="form-group">
-            <label>Manager Username</label>
-            <input type="text" id="reg-manager-name" placeholder="Choose a username">
-        </div>
-        <div class="form-group">
-            <label>Manager Email</label>
-            <input type="email" id="reg-manager-email" placeholder="your@email.com">
-        </div>
-        <div class="form-group">
-            <label>Password</label>
-            <input type="password" id="reg-manager-password" placeholder="Create a strong password">
-        </div>
-        <button class="btn btn-primary" onclick="app.registerNewCompany()">Create Account →</button>
-        <button class="btn btn-outline" style="margin-top:10px;" onclick="app.showView('view-auth')">← Back</button>
     </div>
-</div>
-  <!-- ── REGISTER EMPLOYEE VIEW ── -->
-<div id="view-register-emp" class="view" data-title="EMPLOYEE SIGNUP">
-    <div class="card">
-        <h2><span class="h2-icon">👤</span> Employee Signup</h2>
-        <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:20px; line-height:1.6;">
-            Create your account. Your manager will link you to the company using your username.
-        </p>
-        <div class="form-group">
-            <label>Username</label>
-            <input type="text" id="reg-emp-username-self" placeholder="Choose a username">
+
+    <!-- ── REGISTER EMPLOYEE VIEW ── -->
+    <div id="view-register-emp" class="view" data-title="EMPLOYEE SIGNUP">
+        <div class="card">
+            <h2><span class="h2-icon">👤</span> Employee Signup</h2>
+            <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:20px; line-height:1.6;">
+                Create your account. Your manager will link you to the company using your username.
+            </p>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="reg-emp-username-self" placeholder="Choose a username">
+            </div>
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" id="reg-emp-email-self" placeholder="you@example.com">
+            </div>
+            <div class="form-group">
+                <label>Phone (if no email)</label>
+                <input type="tel" id="reg-emp-phone-self" placeholder="+233 XX XXX XXXX">
+            </div>
+            <div class="form-group">
+                <label>Passcode (optional)</label>
+                <input type="password" id="reg-emp-passcode-self" placeholder="Set a login PIN" maxlength="6">
+            </div>
+            <button class="btn btn-primary" onclick="app.registerNewEmployeeUser()">Create Account →</button>
+            <button class="btn btn-outline" style="margin-top:10px;" onclick="app.showView('view-auth')">← Back</button>
         </div>
-        <div class="form-group">
-            <label>Email</label>
-            <input type="email" id="reg-emp-email-self" placeholder="you@example.com">
-        </div>
-        <div class="form-group">
-            <label>Phone (if no email)</label>
-            <input type="tel" id="reg-emp-phone-self" placeholder="+233 XX XXX XXXX">
-        </div>
-        <div class="form-group">
-            <label>Passcode (optional)</label>
-            <input type="password" id="reg-emp-passcode-self" placeholder="Set a login PIN" maxlength="6">
-        </div>
-        <button class="btn btn-primary" onclick="app.registerNewEmployeeUser()">Create Account →</button>
-        <button class="btn btn-outline" style="margin-top:10px;" onclick="app.showView('view-auth')">← Back</button>
     </div>
-</div>
 
-   <!-- ── MANAGER DASHBOARD ── -->
-<div id="view-manager" class="view">
+    <!-- ── MANAGER DASHBOARD ── -->
+    <div id="view-manager" class="view">
 
-    <!-- Live Team Status -->
-    <p class="section-label">Live Status</p>
-    <div class="card card-accent">
-        <h2 style="cursor:pointer; justify-content:space-between;" onclick="const el=document.getElementById('team-body'); const icon=document.getElementById('team-icon'); if(el.style.display==='none'){el.style.display='block';icon.textContent='−';}else{el.style.display='none';icon.textContent='+';}">
-            <span><span class="h2-icon">📊</span> Team Overview</span>
-            <span id="team-icon" style="font-size:1.2rem; color:var(--text-muted);">−</span>
-        </h2>
-        <div id="team-body">
-            <div id="team-status-display">
-                <p style="color:var(--text-muted); font-size:0.85rem;">No employees assigned yet.</p>
+        <!-- Live Team Status -->
+        <p class="section-label">Live Status</p>
+        <div class="card card-accent">
+            <h2 style="cursor:pointer; justify-content:space-between;" onclick="app.togglePanel('team-body','team-icon')">
+                <span><span class="h2-icon">📊</span> Team Overview</span>
+                <span id="team-icon" style="font-size:1.2rem; color:var(--text-muted);">+</span>
+            </h2>
+            <div id="team-body" style="display:none;">
+                <div id="team-status-display">
+                    <p style="color:var(--text-muted); font-size:0.85rem;">No employees assigned yet.</p>
+                </div>
             </div>
         </div>
-    </div>
 
-    <!-- Activity Logs -->
-    <p class="section-label">Activity</p>
-    <div class="card">
-     <h2 style="cursor:pointer; justify-content:space-between;" onclick="app.togglePanel('team-body','team-icon')"></h2>
-            <span><span class="h2-icon">🕐</span> Recent Activity</span>
-            <span id="activity-icon" style="font-size:1.2rem; color:var(--text-muted);">−</span>
-        </h2>
-        <div id="activity-body">
-            <div id="employee-list">
-                <p style="color:var(--text-muted); font-size:0.85rem;">No activity yet.</p>
+        <!-- Activity Logs -->
+        <p class="section-label">Activity</p>
+        <div class="card">
+            <h2 style="cursor:pointer; justify-content:space-between;" onclick="app.togglePanel('activity-body','activity-icon')">
+                <span><span class="h2-icon">🕐</span> Recent Activity</span>
+                <span id="activity-icon" style="font-size:1.2rem; color:var(--text-muted);">+</span>
+            </h2>
+            <div id="activity-body" style="display:none;">
+                <div id="employee-list">
+                    <p style="color:var(--text-muted); font-size:0.85rem;">No activity yet.</p>
+                </div>
             </div>
         </div>
-    </div>
 
-    <!-- Sites -->
-    <p class="section-label">Worksites</p>
-    <div class="card">
-        <h2><span class="h2-icon">📍</span> Manage Sites</h2>
-        <div class="form-group">
-            <label>New Worksite Name</label>
-            <input type="text" id="new-site-name" placeholder="e.g. Headquarters">
+        <!-- Sites -->
+        <p class="section-label">Worksites</p>
+        <div class="card">
+            <h2><span class="h2-icon">📍</span> Manage Sites</h2>
+            <div class="form-group">
+                <label>New Worksite Name</label>
+                <input type="text" id="new-site-name" placeholder="e.g. Headquarters">
+            </div>
+            <div id="manager-coords" class="coordinates-display" style="margin-bottom:12px;">📍 Waiting for GPS...</div>
+            <button class="btn btn-primary" onclick="app.createSite()">Set Location & Create</button>
+            <div id="site-list-display" style="margin-top:16px;"></div>
         </div>
-        <div id="manager-coords" class="coordinates-display" style="margin-bottom:12px;">📍 Waiting for GPS...</div>
-        <button class="btn btn-primary" onclick="app.createSite()">Set Location & Create</button>
-        <div id="site-list-display" style="margin-top:16px;"></div>
-    </div>
 
-    <!-- Team Management -->
-    <p class="section-label">Team</p>
-    <div class="card">
-        <h2><span class="h2-icon">➕</span> Add / Link Employee</h2>
-        <div class="form-group">
-            <label>Assigned Worksite</label>
-            <select id="new-emp-site">
-                <option value="" disabled selected>Select Worksite</option>
-            </select>
+        <!-- Team Management -->
+        <p class="section-label">Team</p>
+        <div class="card">
+            <h2><span class="h2-icon">➕</span> Add / Link Employee</h2>
+            <div class="form-group">
+                <label>Assigned Worksite</label>
+                <select id="new-emp-site">
+                    <option value="" disabled selected>Select Worksite</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Employee Username</label>
+                <input type="text" id="new-emp-username" placeholder="Existing username">
+            </div>
+            <div class="form-group">
+                <label>Contact (Email or Phone)</label>
+                <input type="text" id="new-emp-contact" placeholder="Email or Phone">
+            </div>
+            <div class="form-group">
+                <label>Passcode (optional)</label>
+                <input type="text" id="new-emp-passcode" placeholder="Login PIN" maxlength="6">
+            </div>
+            <button class="btn btn-primary" onclick="app.registerEmployee()">Link Employee</button>
         </div>
-        <div class="form-group">
-            <label>Employee Username</label>
-            <input type="text" id="new-emp-username" placeholder="Existing username">
-        </div>
-        <div class="form-group">
-            <label>Contact (Email or Phone)</label>
-            <input type="text" id="new-emp-contact" placeholder="Email or Phone">
-        </div>
-        <div class="form-group">
-            <label>Passcode (optional)</label>
-            <input type="text" id="new-emp-passcode" placeholder="Login PIN" maxlength="6">
-        </div>
-        <button class="btn btn-primary" onclick="app.registerEmployee()">Link Employee</button>
-    </div>
 
-    <div class="card">
-        <h2><span class="h2-icon">👥</span> My Team</h2>
-        <div id="team-list-container">
-            <p style="color:var(--text-muted); font-size:0.85rem; text-align:center;">No employees yet.</p>
+        <div class="card">
+            <h2><span class="h2-icon">👥</span> My Team</h2>
+            <div id="team-list-container">
+                <p style="color:var(--text-muted); font-size:0.85rem; text-align:center;">No employees yet.</p>
+            </div>
+        </div>
+
+        <button class="btn btn-outline" onclick="app.logout()" style="margin-top:4px;">Sign Out</button>
+
+        <div class="debug-controls">
+            <div class="debug-title">🚧 Dev Tools</div>
+            <button class="btn btn-outline btn-sm" onclick="if(window.app&&app.currentPosition){app.debugSetLocation(app.currentPosition.lat+0.005,app.currentPosition.lng);}else{alert('No position');}">
+                🚀 Teleport Away (Test Geofence)
+            </button>
         </div>
     </div>
-
-    <button class="btn btn-outline" onclick="app.logout()" style="margin-top:4px;">Sign Out</button>
-
-    <div class="debug-controls">
-        <div class="debug-title">🚧 Dev Tools</div>
-        <button class="btn btn-outline btn-sm" onclick="if(window.app&&app.currentPosition){app.debugSetLocation(app.currentPosition.lat+0.005,app.currentPosition.lng);}else{alert('No position');}">
-            🚀 Teleport Away (Test Geofence)
-        </button>
-    </div>
-</div>
 
     <!-- ── EMPLOYEE DASHBOARD ── -->
     <div id="view-employee" class="view">
@@ -264,6 +259,12 @@
         </div>
 
         <button class="btn btn-outline" onclick="app.logout()">Sign Out</button>
+
+        <div class="card">
+            <h2><span class="h2-icon">🔐</span> Security</h2>
+            <p id="biometric-status" class="text-sub" style="margin-bottom:12px;">Optional: enable biometric sign in for faster access.</p>
+            <button id="btn-enable-biometrics" class="btn btn-outline">Enable Biometrics</button>
+        </div>
 
         <div class="debug-controls">
             <div class="debug-title">🚧 Dev Tools</div>

@@ -380,6 +380,17 @@ class HRApp {
         }
     }
 
+    async deleteSite(siteId) {
+        try {
+            const { error } = await supabase.from('sites').delete().eq('id', siteId);
+            if (error) throw error;
+            delete this.sites[siteId];
+        } catch (error) {
+            console.error('Error deleting site:', error);
+            throw error;
+        }
+    }
+
     async saveCheckin(checkinData) {
         try {
             const { error } = await supabase.from('checkins').insert({ ...checkinData, created_at: new Date().toISOString() });
@@ -907,6 +918,56 @@ class HRApp {
         } catch (error) { alert('Failed to update location: ' + error.message); }
     }
 
+    async renameSite(siteId) {
+        const site = this.sites[siteId];
+        if (!site) return alert('Site not found.');
+        const nextName = prompt(`Rename site "${site.name}"`, site.name);
+        if (!nextName) return;
+        const cleaned = nextName.trim();
+        if (!cleaned) return alert('Site name cannot be empty.');
+        if (cleaned === site.name) return;
+
+        try {
+            site.name = cleaned;
+            await this.saveSite(site);
+            this.refreshDashboard();
+            alert(`Site renamed to "${cleaned}".`);
+        } catch (error) {
+            alert('Failed to rename site: ' + error.message);
+        }
+    }
+
+    async removeSite(siteId) {
+        const site = this.sites[siteId];
+        if (!site) return alert('Site not found.');
+
+        const assignedEmployees = Object.values(this.employees).filter(
+            (emp) => emp.company_id === this.currentUser.company_id && String(emp.assigned_site_id) === String(siteId)
+        );
+        if (!confirm(`Delete site "${site.name}"?\n${assignedEmployees.length} employee(s) will be unassigned.`)) return;
+
+        try {
+            await this.deleteSite(siteId);
+
+            const updates = assignedEmployees.map(async (emp) => {
+                emp.assigned_site_id = null;
+                await this.saveEmployee(emp.username, emp);
+            });
+            await Promise.all(updates);
+
+            if (this.companies[this.currentUser.company_id]) {
+                this.companies[this.currentUser.company_id].sites = this.companies[this.currentUser.company_id].sites.filter(
+                    s => String(s.id) !== String(siteId)
+                );
+            }
+
+            this.refreshDashboard();
+            alert(`Site "${site.name}" deleted. ${assignedEmployees.length} employee(s) unassigned.`);
+        } catch (error) {
+            alert('Failed to delete site: ' + error.message);
+        }
+    }
+
     async registerEmployee() {
         const username = document.getElementById('new-emp-username').value.trim().toLowerCase();
         const contact = document.getElementById('new-emp-contact').value.trim();
@@ -1084,7 +1145,7 @@ class HRApp {
             const siteListDiv = document.getElementById('site-list-display');
             if (siteListDiv) {
                 siteListDiv.innerHTML = company.sites?.length > 0
-                    ? company.sites.map(s => `<div class="site-item"><div>📍 <strong>${s.name}</strong><div class="text-small text-muted" style="margin-top:4px;">${s.lat.toFixed(6)}, ${s.lng.toFixed(6)}</div></div><button class="btn-outline text-small" onclick="app.updateSiteLocation('${s.id}')">Update Loc</button></div>`).join('')
+                    ? company.sites.map(s => `<div class="site-item"><div>📍 <strong>${s.name}</strong><div class="text-small text-muted" style="margin-top:4px;">${s.lat.toFixed(6)}, ${s.lng.toFixed(6)}</div></div><div style="display:flex; gap:6px; align-items:center;"><button class="btn-outline text-small" onclick="app.renameSite('${s.id}')">Rename</button><button class="btn-outline text-small" onclick="app.updateSiteLocation('${s.id}')">Update Loc</button><button class="btn-danger btn-sm" onclick="app.removeSite('${s.id}')">Delete</button></div></div>`).join('')
                     : '<small>No sites configured.</small>';
             }
 

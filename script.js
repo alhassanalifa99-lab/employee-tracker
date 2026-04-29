@@ -1,5 +1,13 @@
 import { supabase } from './supabase.js';
 
+const alert = (message) => {
+    if (window.app && typeof window.app.showToastFromLegacyAlert === 'function') {
+        window.app.showToastFromLegacyAlert(message);
+        return;
+    }
+    console.warn('Alert suppressed before app init:', message);
+};
+
 // Global Error Handler (Must be first)
 window.onerror = function (msg, url, line, col, error) {
     alert("⚠️ CRITICAL ERROR:\n" + msg + "\nLine: " + line);
@@ -14,6 +22,8 @@ class HRApp {
         this.pendingUser = null;
         this.pendingRegistration = null;
         this.MAX_DISTANCE_METERS = 50;
+        this.geofenceInterval = null;
+        this.geofenceLock = false;
         this.managers = {};
         this.employees = {};
         this.sites = {};
@@ -204,6 +214,45 @@ class HRApp {
         const companyField = document.getElementById('auth-company');
         if (usernameField) usernameField.addEventListener('input', () => { this.updateBiometricLoginButton(); });
         if (companyField) companyField.addEventListener('input', () => { this.updateBiometricLoginButton(); });
+    }
+
+    async getFreshPosition(timeout = 10000) {
+        return new Promise((resolve, reject) => {
+            if (!navigator.geolocation) {
+                reject(new Error('Geolocation is not supported by your browser.'));
+                return;
+            }
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                    this.currentPosition = coords;
+                    this.updateUIWithLocation();
+                    resolve(coords);
+                },
+                (err) => reject(new Error(err.message || 'Unable to get location')),
+                { enableHighAccuracy: true, timeout, maximumAge: 0 }
+            );
+        });
+    }
+
+    startGeofenceWatchdog() {
+        if (this.geofenceInterval) clearInterval(this.geofenceInterval);
+        this.geofenceInterval = setInterval(async () => {
+            if (!this.currentUser || this.currentUser.role !== 'employee') return;
+            try {
+                await this.getFreshPosition(8000);
+            } catch (err) {
+                console.warn('Geofence watchdog GPS refresh failed:', err?.message || err);
+            }
+            await this.monitorGeofence();
+        }, 15000);
+    }
+
+    stopGeofenceWatchdog() {
+        if (this.geofenceInterval) {
+            clearInterval(this.geofenceInterval);
+            this.geofenceInterval = null;
+        }
     }
 
     async loadAllData() {
@@ -530,13 +579,10 @@ class HRApp {
                 await this.saveEmployee(username, user);
             }
 
-            if (!this.currentPosition) {
-                alert("📍 DETECTING LOCATION...\n\nPlease allow GPS access and wait a moment.");
-                navigator.geolocation.getCurrentPosition(
-                    (pos) => { this.currentPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude }; this.updateUIWithLocation(); alert("✅ GPS Linked! Click 'Login' again."); },
-                    (err) => { alert("❌ GPS Error: " + err.message); },
-                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-                );
+            try {
+                await this.getFreshPosition(10000);
+            } catch (err) {
+                alert(`❌ GPS Error: ${err.message}\n\nPlease allow GPS access and try again.`);
                 return;
             }
 
@@ -552,6 +598,7 @@ class HRApp {
         this.setupRealtimeSubscriptions();
         this.showView(user.role === 'manager' ? 'view-manager' : 'view-employee');
         this.refreshDashboard();
+        if (user.role === 'employee') this.startGeofenceWatchdog();
     }
 
     async loginWithBiometrics() {
@@ -597,11 +644,23 @@ class HRApp {
                     }]
                 }
             });
+
+            try {
+                await this.getFreshPosition(10000);
+            } catch (err) {
+                return alert(`❌ GPS Error: ${err.message}\n\nPlease allow GPS access and try again.`);
+            }
+            const site = Object.values(this.sites).find(s => String(s.id) === String(user.assigned_site_id) && s.company_id === user.company_id);
+            if (!site) return alert("Error: Assigned Worksite not found. Contact Manager.");
+            const dist = this.getDistanceFromLatLonInMeters(this.currentPosition.lat, this.currentPosition.lng, site.lat, site.lng);
+            if (dist > this.MAX_DISTANCE_METERS) return alert(`🚫 ACCESS DENIED\n\nYou are ${Math.round(dist)} meters away from ${site.name}.\n\nYou must be within ${this.MAX_DISTANCE_METERS}m to log in.`);
+
             this.currentUser = { username, ...user };
             localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
             this.setupRealtimeSubscriptions();
             this.showView('view-employee');
             this.refreshDashboard();
+            this.startGeofenceWatchdog();
         } catch (error) {
             console.error('Biometric login failed:', error);
             alert('Biometric verification failed. You can still log in with passcode/password.');
@@ -693,6 +752,7 @@ class HRApp {
         localStorage.removeItem('hrapp_user');
         this.showView('view-auth');
         this.updateBiometricLoginButton();
+        this.stopGeofenceWatchdog();
         if (this.timerInterval) clearInterval(this.timerInterval);
         if (this.subscriptions.employees) supabase.removeChannel(this.subscriptions.employees);
         if (this.subscriptions.checkins) supabase.removeChannel(this.subscriptions.checkins);
@@ -756,15 +816,22 @@ class HRApp {
     }
 
     async monitorGeofence() {
+        if (this.geofenceLock) return;
+        if (!this.currentUser || this.currentUser.role !== 'employee') return;
         const user = this.employees[this.currentUser.username];
         if (!user || user.status !== 'checked-in') return;
         const site = Object.values(this.sites).find(s => String(s.id) === String(user.assigned_site_id) && s.company_id === user.company_id);
         if (!site || !this.currentPosition) return;
         const dist = this.getDistanceFromLatLonInMeters(this.currentPosition.lat, this.currentPosition.lng, site.lat, site.lng);
         if (dist > this.MAX_DISTANCE_METERS) {
-            alert(`⚠️ GEOCONFIG ALERT\n\nYou have left the worksite boundary (${Math.round(dist)}m).\n\nYou have been automatically logged out.`);
-            await this.checkOut("Geofence Exit");
-            this.logout();
+            this.geofenceLock = true;
+            try {
+                alert(`⚠️ GEOCONFIG ALERT\n\nYou have left the worksite boundary (${Math.round(dist)}m).\n\nYou have been automatically logged out.`);
+                await this.checkOut("Geofence Exit");
+                this.logout();
+            } finally {
+                this.geofenceLock = false;
+            }
         }
     }
 
@@ -906,13 +973,17 @@ class HRApp {
     // --- Employee Features ---
 
     async checkIn() {
-        if (!this.currentPosition) return alert("GPS not available.");
+        try {
+            await this.getFreshPosition(10000);
+        } catch (err) {
+            return alert(`❌ GPS Error: ${err.message}`);
+        }
         const user = this.employees[this.currentUser.username];
         const site = Object.values(this.sites).find(s => String(s.id) === String(user.assigned_site_id) && s.company_id === user.company_id);
         if (!site) return alert("Error: Your assigned worksite was deleted or not found.");
 
         const dist = this.getDistanceFromLatLonInMeters(this.currentPosition.lat, this.currentPosition.lng, site.lat, site.lng);
-        if (dist > this.MAX_DISTANCE_METERS) return alert(`You are too far from ${site.name}! (${Math.round(dist)}m away)`);
+            if (dist > this.MAX_DISTANCE_METERS) return alert(`You are ${Math.round(dist)}m away from ${site.name}`);
 
         try {
             const checkInTime = new Date().toISOString();
@@ -920,23 +991,22 @@ class HRApp {
             await this.saveEmployee(this.currentUser.username, user);
             this.trackLocation(site.id);
             if (this.trackingInterval) clearInterval(this.trackingInterval);
-        this.trackingInterval = setInterval(() => {
-    // Force fresh GPS before geofence check
-    navigator.geolocation.getCurrentPosition(
-        (pos) => {
-            this.currentPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-            this.updateUIWithLocation();
-            this.trackLocation(site.id);
-            if (this.currentUser) this.monitorGeofence();
-        },
-        (err) => {
-            console.error('GPS update failed:', err);
-            // Still check with last known position
-            if (this.currentUser) this.monitorGeofence();
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
-}, 30000);
+            this.trackingInterval = setInterval(() => {
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                        this.currentPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                        this.updateUIWithLocation();
+                        this.trackLocation(site.id);
+                        if (this.currentUser) this.monitorGeofence();
+                    },
+                    (err) => {
+                        console.error('GPS update failed:', err);
+                        if (this.currentUser) this.monitorGeofence();
+                    },
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                );
+            }, 30000);
+            this.startGeofenceWatchdog();
             await this.saveCheckin({ username: this.currentUser.username, company_id: this.currentUser.company_id, action: `Check-In @ ${site.name}`, time: new Date().toLocaleTimeString(), site_id: site.id });
             this.refreshDashboard();
         } catch (error) { alert('Failed to check in: ' + error.message); }
@@ -982,6 +1052,7 @@ class HRApp {
         try {
             user.status = 'checked-out'; user.check_in_time = null; user.last_ping = new Date().toISOString();
             if (this.trackingInterval) clearInterval(this.trackingInterval);
+            this.stopGeofenceWatchdog();
             await this.saveEmployee(this.currentUser.username, user);
             await this.saveCheckin({ username: this.currentUser.username, company_id: this.currentUser.company_id, action, time: new Date().toLocaleTimeString(), site_id: null });
             if (reasonInput) reasonInput.value = '';
@@ -1128,15 +1199,60 @@ class HRApp {
         alert(`Debug: Teleported to ${lat}, ${lng}`);
     }
 
-    showToast(message, type = 'info', duration = 4000) {
+    showToast(input, type = 'info', duration = 4200) {
         try {
             const container = document.getElementById('toast-container');
             if (!container) return;
+
+            const palette = {
+                success: { icon: '✅', title: 'Success' },
+                error: { icon: '⛔', title: 'Error' },
+                warning: { icon: '⚠️', title: 'Warning' },
+                info: { icon: 'ℹ️', title: 'Info' }
+            };
+
+            const payload = typeof input === 'string'
+                ? { message: input, type, duration }
+                : { ...(input || {}) };
+            const toastType = payload.type || type || 'info';
+            const tone = palette[toastType] || palette.info;
+            const toastTitle = payload.title || tone.title;
+            const toastMessage = payload.message || '';
+            const toastIcon = payload.icon || tone.icon;
+            const ttl = payload.duration || duration;
+
             const node = document.createElement('div');
-            node.className = `toast ${type}`; node.innerText = message;
+            node.className = `toast ${toastType}`;
+            node.innerHTML = `
+                <div class="toast-icon">${toastIcon}</div>
+                <div class="toast-copy">
+                    <div class="toast-title">${toastTitle}</div>
+                    <div class="toast-message">${toastMessage}</div>
+                </div>
+            `;
             container.appendChild(node);
-            setTimeout(() => { try { node.style.opacity = '0'; node.style.transform = 'translateY(-6px)'; setTimeout(() => { if (node.parentNode) node.parentNode.removeChild(node); }, 260); } catch (e) {} }, duration);
+            setTimeout(() => {
+                try {
+                    node.classList.add('leaving');
+                    setTimeout(() => { if (node.parentNode) node.parentNode.removeChild(node); }, 260);
+                } catch (e) {}
+            }, ttl);
         } catch (err) { console.warn('Toast failed', err); }
+    }
+
+    showToastFromLegacyAlert(rawMessage) {
+        const text = String(rawMessage || '').replace(/\n+/g, '\n').trim();
+        const upper = text.toUpperCase();
+        let type = 'info';
+        if (upper.includes('FAILED') || upper.includes('ERROR') || upper.includes('DENIED') || upper.includes('INVALID')) type = 'error';
+        else if (upper.includes('WARNING') || upper.includes('ALERT') || upper.includes('REQUIRED')) type = 'warning';
+        else if (upper.includes('SUCCESS') || upper.includes('CREATED') || upper.includes('LINKED')) type = 'success';
+
+        const parts = text.split('\n').filter(Boolean);
+        const first = parts[0] || 'Notification';
+        const body = parts.length > 1 ? parts.slice(1).join(' ') : first;
+        const cleanTitle = first.replace(/^[^\w]+/, '').trim() || 'Notification';
+        this.showToast({ title: cleanTitle, message: body, type });
     }
 
     // --- Utils ---

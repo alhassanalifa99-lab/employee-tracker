@@ -612,41 +612,80 @@ select option { background: var(--surface-2); }
 
 #toast-container {
     position: fixed;
-    top: 16px;
-    right: 16px;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
     z-index: 9999;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
+    width: min(92vw, 420px);
     pointer-events: none;
 }
 
 .toast {
     pointer-events: auto;
-    min-width: 220px;
-    max-width: 320px;
-    background: var(--surface-2);
+    width: 100%;
+    background: rgba(18, 24, 28, 0.95);
     color: var(--text);
-    border: 1px solid var(--border);
-    padding: 12px 16px;
-    border-radius: var(--radius-sm);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    border: 1px solid var(--border-hover);
+    padding: 12px 14px;
+    border-radius: 14px;
+    box-shadow: 0 14px 32px rgba(0,0,0,0.55);
     font-size: 0.88rem;
     display: flex;
-    align-items: center;
-    gap: 10px;
+    align-items: flex-start;
+    gap: 12px;
     opacity: 0;
-    transform: translateX(10px);
-    animation: toast-in 240ms ease forwards;
+    transform: translateY(-14px) scale(0.98);
+    animation: toast-in 260ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    backdrop-filter: blur(12px);
+}
+
+.toast-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    flex-shrink: 0;
+    background: rgba(255,255,255,0.08);
+}
+
+.toast-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.toast-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.85rem;
+    letter-spacing: 0.2px;
+}
+
+.toast-message {
+    color: var(--text-mid);
+    line-height: 1.35;
+    font-size: 0.82rem;
 }
 
 .toast.success { border-left: 3px solid var(--green); }
-.toast.error   { border-left: 3px solid var(--red); }
-.toast.warn    { border-left: 3px solid var(--amber); }
-.toast.info    { border-left: 3px solid #4aa3ff; }
+.toast.error { border-left: 3px solid var(--red); }
+.toast.warning { border-left: 3px solid var(--amber); }
+.toast.info { border-left: 3px solid #4aa3ff; }
 
 @keyframes toast-in {
-    to { opacity: 1; transform: translateX(0); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.toast.leaving {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+    transition: all 0.22s ease;
 }
 
 .debug-controls {

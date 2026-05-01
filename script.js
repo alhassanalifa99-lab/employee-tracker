@@ -565,10 +565,14 @@ class HRApp {
 
         if (user.company_id && user.company_id !== companyId) return alert(`❌ Incorrect Company ID.\nThis user belongs to: ${user.company_id}`);
 
-        if (user.passcode) {
-            const passInput = document.getElementById('auth-passcode').value.trim();
-            if (!passInput) return alert(`🔒 This account is protected.\nEnter your Passcode to login.`);
-            if (passInput !== user.passcode) return alert(`❌ Invalid Passcode.`);
+        const credentialInput = document.getElementById('auth-passcode')?.value?.trim() || '';
+        if (user.role === 'manager') {
+            if (!credentialInput) return alert('Enter your password to login.');
+            if (!user.password) return alert('This manager account is missing a password. Please contact support / re-register.');
+            if (credentialInput !== String(user.password)) return alert('❌ Invalid password.');
+        } else if (user.passcode) {
+            if (!credentialInput) return alert(`🔒 This account is protected.\nEnter your Passcode to login.`);
+            if (credentialInput !== String(user.passcode)) return alert(`❌ Invalid Passcode.`);
         }
 
         if (user.verified === false) {
@@ -1126,6 +1130,12 @@ class HRApp {
         if (!this.currentUser) return;
 
         if (this.currentUser.role === 'manager') {
+               this.checkSubscription().then(active => {
+        if (!active) {
+            this.showToast({ message: 'Trial expired. Please subscribe.', type: 'warning' });
+            this.showView('view-subscription');
+        }
+    });
             const company = this.getCompanyData(this.currentUser.company_id);
 
             // 1. Sites dropdown
@@ -1244,8 +1254,26 @@ class HRApp {
     startTimer(startTime) {
         if (this.timerInterval) clearInterval(this.timerInterval);
         const timerElem = document.getElementById('emp-timer');
+        if (!timerElem) return;
+
+        const startMs = (() => {
+            if (startTime == null) return null;
+            if (typeof startTime === 'number') return startTime;
+            if (startTime instanceof Date) return startTime.getTime();
+            if (typeof startTime === 'string') {
+                const parsed = Date.parse(startTime);
+                return Number.isFinite(parsed) ? parsed : null;
+            }
+            return null;
+        })();
+        if (startMs == null) {
+            timerElem.innerText = '00:00:00';
+            timerElem.style.color = '';
+            return;
+        }
+
         this.timerInterval = setInterval(() => {
-            const diff = Date.now() - startTime;
+            const diff = Date.now() - startMs;
             const h = Math.floor(diff / 3600000);
             const m = Math.floor((diff % 3600000) / 60000);
             const s = Math.floor((diff % 60000) / 1000);
@@ -1335,7 +1363,53 @@ class HRApp {
         if (el.style.display === 'none') { el.style.display = 'block'; icon.textContent = '−'; }
         else { el.style.display = 'none'; icon.textContent = '+'; }
     }
+// --- Payment ---
 
+    initiatePayment(planName, amount, maxEmployees) {
+        if (!this.currentUser) return;
+        const manager = this.managers[this.currentUser.username];
+        const email = manager?.email || '';
+        if (!email) return alert('Manager email not found. Please contact support.');
+
+        const handler = PaystackPop.setup({
+            key: 'pk_test_554291712d47569a3381b5b6b1583e5b74a93b0f',
+            email,
+            amount,
+            currency: 'GHS',
+            ref: `ET-${this.currentUser.company_id}-${Date.now()}`,
+            metadata: { company_id: this.currentUser.company_id, plan: planName, max_employees: maxEmployees },
+            callback: (response) => { this.onPaymentSuccess(response, planName, maxEmployees); },
+            onClose: () => { this.showToast({ message: 'Payment cancelled', type: 'warning' }); }
+        });
+        handler.openIframe();
+    }
+
+    async onPaymentSuccess(response, planName, maxEmployees) {
+        try {
+            const nextMonth = new Date();
+            nextMonth.setMonth(nextMonth.getMonth() + 1);
+            await supabase.from('subscriptions').upsert({
+                company_id: this.currentUser.company_id,
+                plan: planName, status: 'active',
+                trial_end: nextMonth.toISOString(),
+                employee_count: maxEmployees,
+                paystack_ref: response.reference
+            }, { onConflict: 'company_id' });
+            this.showToast({ message: `${planName} plan activated!`, type: 'success' });
+            this.showView('view-manager');
+            this.refreshDashboard();
+        } catch (error) {
+            alert('Payment recorded but failed to update subscription: ' + error.message);
+        }
+    }
+
+    async checkSubscription() {
+        try {
+            const { data, error } = await supabase.from('subscriptions').select('*').eq('company_id', this.currentUser.company_id).maybeSingle();
+            if (error || !data) return true;
+            return data.status === 'active' || new Date() < new Date(data.trial_end);
+        } catch { return true; }
+    }
     toggleEmployeeHistory(username) {
         const el = document.getElementById(`history-${username}`);
         if (!el) return;

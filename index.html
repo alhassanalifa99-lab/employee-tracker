@@ -143,6 +143,21 @@
         </div>
     </div>
 
+    <!-- ── SUBSCRIPTION VIEW ── -->
+    <div id="view-subscription" class="view" data-title="SUBSCRIPTION">
+        <div class="card" style="text-align:center;">
+            <h2 style="justify-content:center; margin-bottom:16px;">Subscription Required</h2>
+            <p style="color:var(--text-muted); font-size:0.88rem; margin-bottom:24px; line-height:1.6;">
+                Your trial period has ended. Please upgrade your plan to continue using Employee Tracker.
+            </p>
+            <div style="margin:24px 0; padding:16px; background:rgba(255,193,7,0.1); border-radius:8px; border-left:4px solid var(--amber);">
+                <p style="font-size:0.9rem; color:var(--text-muted);">Contact support for billing inquiries or choose a plan below.</p>
+            </div>
+            <button class="btn btn-primary" onclick="if(window.app) app.initiatePayment('Starter', 9900, 5)">Upgrade to Starter (GH₵99)</button>
+            <button class="btn btn-outline" style="margin-top:10px;" onclick="if(window.app) app.logout()">Back to Login</button>
+        </div>
+    </div>
+
     <!-- ── MANAGER DASHBOARD ── -->
     <div id="view-manager" class="view">
 
@@ -246,7 +261,7 @@
         </div>
 
         <div id="emp-actions">
-            <button id="btn-checkin" class="btn btn-primary" onclick="app.checkIn()">✅ Check In</button>
+            <button id="btn-checkin" class="btn btn-primary" onclick="app.checkIn()">Check In</button>
             <button id="btn-checkout" class="btn btn-danger" onclick="app.checkOut()" style="display:none;">🛑 Check Out</button>
             <button id="btn-toggle-reason" type="button" class="btn btn-outline text-small" onclick="app.toggleCheckoutReason()">📝 Add reason for leaving</button>
         </div>

@@ -257,6 +257,11 @@ class HRApp {
 
     async loadAllData() {
         try {
+               // Refresh session if expired
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.expires_at && session.expires_at * 1000 < Date.now()) {
+            await supabase.auth.refreshSession();
+        }
             const { data: managersData, error: managersError } = await supabase.from('managers').select('*');
             if (managersError) throw managersError;
             managersData?.forEach(m => {
@@ -513,8 +518,8 @@ class HRApp {
                 await this.saveManager(this.pendingRegistration.username, this.pendingRegistration.managerData);
                 await this.createTrialSubscription(this.pendingRegistration.company_id);
 
-                alert("✅ Email Verified Successfully!");
-                alert(`🎉 Company "${this.pendingRegistration.company_name}" Created!\n\nCompany ID: ${this.pendingRegistration.company_id}\n\nRedirecting to your dashboard...`);
+                alert(" Email Verified Successfully!");
+                alert(` Company "${this.pendingRegistration.company_name}" Created!\n\nCompany ID: ${this.pendingRegistration.company_id}\n\nRedirecting to your dashboard...`);
 
                 const user = this.managers[this.pendingRegistration.username];
                 this.currentUser = { username: this.pendingRegistration.username, ...user };
@@ -528,8 +533,8 @@ class HRApp {
             } else if (this.pendingRegistration.type === 'employee') {
                 this.pendingRegistration.employeeData.verified = true;
                 await this.saveEmployee(this.pendingRegistration.username, this.pendingRegistration.employeeData);
-                alert("✅ Email Verified Successfully!");
-                alert(`🎉 Account Created!\n\nUsername: ${this.pendingRegistration.username}\n\nPlease login with your credentials.`);
+                alert(" Email Verified Successfully!");
+                alert(` Account Created!\n\nUsername: ${this.pendingRegistration.username}\n\nPlease login with your credentials.`);
                 const usernameField = document.getElementById('auth-username');
                 if (usernameField) usernameField.value = this.pendingRegistration.username;
             }
@@ -538,7 +543,7 @@ class HRApp {
             this.showView('view-auth');
         } catch (error) {
             console.error('Error verifying OTP:', error);
-            alert('❌ Invalid or expired verification code. Please try again.\n\nError: ' + error.message);
+            alert(' Invalid or expired verification code. Please try again.\n\nError: ' + error.message);
         }
     }
 
@@ -557,22 +562,22 @@ class HRApp {
             if (user.company_id) {
                 companyId = user.company_id;
                 companyInput.value = companyId;
-                alert(`ℹ️ Found Company ID: ${companyId}\nProcessing Login...`);
+                alert(`ℹ Found Company ID: ${companyId}\nProcessing Login...`);
             } else {
                 return alert("You do not have a Company ID yet.\nPlease ask your Manager to link your account.");
             }
         }
 
-        if (user.company_id && user.company_id !== companyId) return alert(`❌ Incorrect Company ID.\nThis user belongs to: ${user.company_id}`);
+        if (user.company_id && user.company_id !== companyId) return alert(` Incorrect Company ID.\nThis user belongs to: ${user.company_id}`);
 
         const credentialInput = document.getElementById('auth-passcode')?.value?.trim() || '';
         if (user.role === 'manager') {
             if (!credentialInput) return alert('Enter your password to login.');
             if (!user.password) return alert('This manager account is missing a password. Please contact support / re-register.');
-            if (credentialInput !== String(user.password)) return alert('❌ Invalid password.');
+            if (credentialInput !== String(user.password)) return alert(' Invalid password.');
         } else if (user.passcode) {
-            if (!credentialInput) return alert(`🔒 This account is protected.\nEnter your Passcode to login.`);
-            if (credentialInput !== String(user.passcode)) return alert(`❌ Invalid Passcode.`);
+            if (!credentialInput) return alert(` This account is protected.\nEnter your Passcode to login.`);
+            if (credentialInput !== String(user.passcode)) return alert(` Invalid Passcode.`);
         }
 
         if (user.verified === false) {
@@ -586,7 +591,7 @@ class HRApp {
         if (user.role === 'employee') {
             const currentFingerprint = await this.generateDeviceFingerprint();
             if (user.device_fingerprint && user.device_fingerprint !== currentFingerprint) {
-                return alert('🚫 Device mismatch detected.\n\nThis account is locked to another device.\nPlease contact your manager to reset your device binding.');
+                return alert(' Device mismatch detected.\n\nThis account is locked to another device.\nPlease contact your manager to reset your device binding.');
             }
             if (!user.device_fingerprint) {
                 user.device_fingerprint = currentFingerprint;
@@ -597,7 +602,7 @@ class HRApp {
             try {
                 await this.getFreshPosition(10000);
             } catch (err) {
-                alert(`❌ GPS Error: ${err.message}\n\nPlease allow GPS access and try again.`);
+                alert(`GPS Error: ${err.message}\n\nPlease allow GPS access and try again.`);
                 return;
             }
 
@@ -637,7 +642,7 @@ class HRApp {
 
         const fingerprint = await this.generateDeviceFingerprint();
         if (user.device_fingerprint && user.device_fingerprint !== fingerprint) {
-            return alert('🚫 Device mismatch detected.\n\nThis account is locked to another device.\nPlease contact your manager to reset your device binding.');
+            return alert(' Device mismatch detected.\n\nThis account is locked to another device.\nPlease contact your manager to reset your device binding.');
         }
         const biometricMap = this.getBiometricMap();
         const biometricKey = this.getBiometricKey(username, user.company_id, fingerprint);
@@ -663,12 +668,12 @@ class HRApp {
             try {
                 await this.getFreshPosition(10000);
             } catch (err) {
-                return alert(`❌ GPS Error: ${err.message}\n\nPlease allow GPS access and try again.`);
+                return alert(` GPS Error: ${err.message}\n\nPlease allow GPS access and try again.`);
             }
             const site = Object.values(this.sites).find(s => String(s.id) === String(user.assigned_site_id) && s.company_id === user.company_id);
             if (!site) return alert("Error: Assigned Worksite not found. Contact Manager.");
             const dist = this.getDistanceFromLatLonInMeters(this.currentPosition.lat, this.currentPosition.lng, site.lat, site.lng);
-            if (dist > this.MAX_DISTANCE_METERS) return alert(`🚫 ACCESS DENIED\n\nYou are ${Math.round(dist)} meters away from ${site.name}.\n\nYou must be within ${this.MAX_DISTANCE_METERS}m to log in.`);
+            if (dist > this.MAX_DISTANCE_METERS) return alert(` ACCESS DENIED\n\nYou are ${Math.round(dist)} meters away from ${site.name}.\n\nYou must be within ${this.MAX_DISTANCE_METERS}m to log in.`);
 
             this.currentUser = { username, ...user };
             localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
@@ -823,7 +828,7 @@ class HRApp {
 
     useMockLocation() {
         this.currentPosition = { lat: 40.7128, lng: -74.0060 };
-        alert("⚠️ USING MOCK LOCATION (New York)\n\nThis allows you to test the app logic without real GPS.");
+        alert(" USING MOCK LOCATION (New York)\n\nThis allows you to test the app logic without real GPS.");
         this.updateUIWithLocation();
         if (this.currentUser && this.currentUser.role === 'employee') this.monitorGeofence();
         const statusEl = document.getElementById('auth-gps-status');
@@ -841,7 +846,7 @@ class HRApp {
         if (dist > this.MAX_DISTANCE_METERS) {
             this.geofenceLock = true;
             try {
-                alert(`⚠️ GEOCONFIG ALERT\n\nYou have left the worksite boundary (${Math.round(dist)}m).\n\nYou have been automatically logged out.`);
+                alert(` GEOCONFIG ALERT\n\nYou have left the worksite boundary (${Math.round(dist)}m).\n\nYou have been automatically logged out.`);
                 await this.checkOut("Geofence Exit");
                 this.logout();
             } finally {
@@ -1041,7 +1046,7 @@ class HRApp {
         try {
             await this.getFreshPosition(10000);
         } catch (err) {
-            return alert(`❌ GPS Error: ${err.message}`);
+            return alert(` GPS Error: ${err.message}`);
         }
         const user = this.employees[this.currentUser.username];
         const site = Object.values(this.sites).find(s => String(s.id) === String(user.assigned_site_id) && s.company_id === user.company_id);
@@ -1155,7 +1160,7 @@ class HRApp {
             const siteListDiv = document.getElementById('site-list-display');
             if (siteListDiv) {
                 siteListDiv.innerHTML = company.sites?.length > 0
-                    ? company.sites.map(s => `<div class="site-item"><div>📍 <strong>${s.name}</strong><div class="text-small text-muted" style="margin-top:4px;">${s.lat.toFixed(6)}, ${s.lng.toFixed(6)}</div></div><div style="display:flex; gap:6px; align-items:center;"><button class="btn-outline text-small" onclick="app.renameSite('${s.id}')">Rename</button><button class="btn-outline text-small" onclick="app.updateSiteLocation('${s.id}')">Update Loc</button><button class="btn-danger btn-sm" onclick="app.removeSite('${s.id}')">Delete</button></div></div>`).join('')
+                    ? company.sites.map(s => `<div class="site-item"><div> <strong>${s.name}</strong><div class="text-small text-muted" style="margin-top:4px;">${s.lat.toFixed(6)}, ${s.lng.toFixed(6)}</div></div><div style="display:flex; gap:6px; align-items:center;"><button class="btn-outline text-small" onclick="app.renameSite('${s.id}')">Rename</button><button class="btn-outline text-small" onclick="app.updateSiteLocation('${s.id}')">Update Loc</button><button class="btn-danger btn-sm" onclick="app.removeSite('${s.id}')">Delete</button></div></div>`).join('')
                     : '<small>No sites configured.</small>';
             }
 
@@ -1166,7 +1171,7 @@ class HRApp {
                 company.sites.forEach(site => {
                     const siteEmployees = Object.values(this.employees).filter(emp => emp.company_id === this.currentUser.company_id && String(emp.assigned_site_id) === String(site.id));
                     if (siteEmployees.length > 0) {
-                        html += `<div class="site-status-group"><h3 class="site-header">📍 ${site.name}</h3>`;
+                        html += `<div class="site-status-group"><h3 class="site-header"> ${site.name}</h3>`;
                         siteEmployees.forEach(emp => {
                             const isActive = emp.status === 'checked-in';
                             html += `<div class="team-member-item"><div><span class="team-member-name">${emp.username}</span><div class="text-sub">${isActive ? 'Active on site' : 'Not at site'}</div></div><div class="team-member-status-icon">${isActive ? '🟢' : '🔴'}</div></div>`;
@@ -1232,8 +1237,8 @@ class HRApp {
             const statusIcon = document.getElementById('emp-status-icon');
             const empBox = document.getElementById('emp-status-box');
             if (statusText && statusIcon && empBox) {
-                if (isCheckedIn) { statusText.innerText = "Checked In"; statusIcon.innerText = "✅"; empBox.style.background = "rgba(40, 167, 69, 0.2)"; }
-                else { statusText.innerText = "Checked Out"; statusIcon.innerText = "🛑"; empBox.style.background = "rgba(255, 77, 77, 0.1)"; }
+                if (isCheckedIn) { statusText.innerText = "Checked In"; statusIcon.innerText = ""; empBox.style.background = "rgba(40, 167, 69, 0.2)"; }
+                else { statusText.innerText = "Checked Out"; statusIcon.innerText = ""; empBox.style.background = "rgba(255, 77, 77, 0.1)"; }
             }
 
             const biometricBtn = document.getElementById('btn-enable-biometrics');
@@ -1277,8 +1282,9 @@ class HRApp {
             const h = Math.floor(diff / 3600000);
             const m = Math.floor((diff % 3600000) / 60000);
             const s = Math.floor((diff % 60000) / 1000);
-            timerElem.innerText = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-            if (h >= 2) { timerElem.style.color = 'var(--red)'; timerElem.innerText += " (RE-CHECK REQUIRED)"; }
+            let timeStr = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+            if (h >= 2) { timerElem.style.color = 'var(--red)'; timeStr += " (RE-CHECK REQUIRED)"; }
+            timerElem.innerText = timeStr;
         }, 1000);
     }
 
@@ -1294,7 +1300,7 @@ class HRApp {
             if (!container) return;
 
             const palette = {
-                success: { icon: '✅', title: 'Success' },
+                success: { icon: '', title: 'Success' },
                 error: { icon: '⛔', title: 'Error' },
                 warning: { icon: '⚠️', title: 'Warning' },
                 info: { icon: 'ℹ️', title: 'Info' }
@@ -1438,6 +1444,6 @@ try {
     window.app = app;
     console.log("App Initialized Successfully");
 } catch (e) {
-    alert("❌ STARTUP FAILED:\n" + e.message);
+    alert("STARTUP FAILED:\n" + e.message);
     console.error(e);
 }

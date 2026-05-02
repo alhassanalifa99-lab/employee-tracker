@@ -66,6 +66,39 @@ class HRApp {
         }
     }
 
+    async resetDatabase() {
+        if (!confirm('⚠️ WARNING: This will delete ALL data (managers, employees, sites, checkins, subscriptions).\n\nAre you absolutely sure?')) return;
+        if (!confirm('This action cannot be undone. Type OK to confirm.') && !prompt('Type OK to confirm') === 'OK') return;
+        
+        try {
+            this.showToast({ message: 'Resetting database...', type: 'info' });
+            await supabase.from('checkins').delete().neq('id', 'x'); // Delete all
+            await supabase.from('subscriptions').delete().neq('company_id', 'x'); // Delete all
+            await supabase.from('sites').delete().neq('id', 'x'); // Delete all
+            await supabase.from('employees').delete().neq('username', 'x'); // Delete all
+            await supabase.from('managers').delete().neq('username', 'x'); // Delete all
+            
+            this.managers = {};
+            this.employees = {};
+            this.sites = {};
+            this.logs = {};
+            this.subscriptions = {};
+            
+            this.showToast({ message: '✅ Database reset complete!', type: 'success' });
+            this.logout();
+        } catch (error) {
+            console.error('Error resetting database:', error);
+            this.showToast({ message: '❌ Failed to reset database: ' + error.message, type: 'error' });
+        }
+    }
+
+    selectPlanAndContinue(maxEmployees, planName) {
+        if (!this.currentUser) return alert('Session expired. Please login.');
+        this.showToast({ message: `✓ ${planName} plan selected!`, type: 'success' });
+        this.showView('view-manager');
+        this.refreshDashboard();
+    }
+
     setupRealtimeSubscriptions() {
         try {
             if (!this.currentUser?.company_id) return;
@@ -519,15 +552,14 @@ class HRApp {
                 await this.createTrialSubscription(this.pendingRegistration.company_id);
 
                 alert(" Email Verified Successfully!");
-                alert(` Company "${this.pendingRegistration.company_name}" Created!\n\nCompany ID: ${this.pendingRegistration.company_id}\n\nRedirecting to your dashboard...`);
+                alert(` Company "${this.pendingRegistration.company_name}" Created!\n\nCompany ID: ${this.pendingRegistration.company_id}\n\nSelect your plan to get started...`);
 
                 const user = this.managers[this.pendingRegistration.username];
                 this.currentUser = { username: this.pendingRegistration.username, ...user };
                 localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
                 this.clearPendingRegistration();
                 this.setupRealtimeSubscriptions();
-                this.showView('view-manager');
-                this.refreshDashboard();
+                this.showView('view-select-plan');
                 return;
 
             } else if (this.pendingRegistration.type === 'employee') {
@@ -863,6 +895,11 @@ class HRApp {
         if (!el) { console.warn('showView: element not found', viewId); return; }
         el.classList.add('active');
 
+        // Update trial status if showing subscription view
+        if (viewId === 'view-subscription' || viewId === 'view-pricing') {
+            this.updateTrialStatus();
+        }
+
         const isDesktop = window.innerWidth >= 768;
         if (isDesktop) {
             if (viewId === 'view-manager') {
@@ -1135,12 +1172,24 @@ class HRApp {
         if (!this.currentUser) return;
 
         if (this.currentUser.role === 'manager') {
-               this.checkSubscription().then(active => {
-        if (!active) {
-            this.showToast({ message: 'Trial expired. Please subscribe.', type: 'warning' });
-            this.showView('view-subscription');
-        }
-    });
+            // Check subscription and show warning if needed
+            this.checkSubscription().then(active => {
+                if (!active) {
+                    this.showToast({ message: '⏰ Trial expired. Please subscribe to continue.', type: 'warning' });
+                    this.showView('view-subscription');
+                    this.updateTrialStatus();
+                    return;
+                }
+                // Show trial warning if less than 7 days
+                this.getTrialDaysRemaining().then(daysLeft => {
+                    if (daysLeft > 0 && daysLeft <= 7) {
+                        this.showToast({ message: `⚠️ Your free trial expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}.`, type: 'warning' });
+                    }
+                    // Update subscription status card
+                    this.updateSubscriptionStatusCard(daysLeft);
+                });
+            });
+            
             const company = this.getCompanyData(this.currentUser.company_id);
 
             // 1. Sites dropdown
@@ -1392,16 +1441,16 @@ class HRApp {
 
     async onPaymentSuccess(response, planName, maxEmployees) {
         try {
-            const nextMonth = new Date();
-            nextMonth.setMonth(nextMonth.getMonth() + 1);
+            const subscriptionEndDate = new Date();
+            subscriptionEndDate.setDate(subscriptionEndDate.getDate() + 30);
             await supabase.from('subscriptions').upsert({
                 company_id: this.currentUser.company_id,
                 plan: planName, status: 'active',
-                trial_end: nextMonth.toISOString(),
+                trial_end: subscriptionEndDate.toISOString(),
                 employee_count: maxEmployees,
                 paystack_ref: response.reference
             }, { onConflict: 'company_id' });
-            this.showToast({ message: `${planName} plan activated!`, type: 'success' });
+            this.showToast({ message: `${planName} plan activated! Valid until ${subscriptionEndDate.toLocaleDateString()}`, type: 'success' });
             this.showView('view-manager');
             this.refreshDashboard();
         } catch (error) {
@@ -1413,8 +1462,68 @@ class HRApp {
         try {
             const { data, error } = await supabase.from('subscriptions').select('*').eq('company_id', this.currentUser.company_id).maybeSingle();
             if (error || !data) return true;
-            return data.status === 'active' || new Date() < new Date(data.trial_end);
+            const trialActive = data.status === 'trial' && new Date() < new Date(data.trial_end);
+            const subscriptionActive = data.status === 'active' && new Date() < new Date(data.trial_end);
+            return trialActive || subscriptionActive;
         } catch { return true; }
+    }
+
+    async getTrialDaysRemaining() {
+        try {
+            const { data, error } = await supabase.from('subscriptions').select('trial_end').eq('company_id', this.currentUser.company_id).maybeSingle();
+            if (error || !data?.trial_end) return 0;
+            const trialEnd = new Date(data.trial_end);
+            const today = new Date();
+            const daysLeft = Math.ceil((trialEnd - today) / (1000 * 60 * 60 * 24));
+            return Math.max(0, daysLeft);
+        } catch { return 0; }
+    }
+
+    async updateTrialStatus() {
+        const daysLeft = await this.getTrialDaysRemaining();
+        const daysDisplay = document.getElementById('trial-days-left');
+        if (daysDisplay) daysDisplay.innerText = daysLeft;
+        const statusDisplay = document.getElementById('trial-status');
+        if (statusDisplay) {
+            if (daysLeft <= 0) {
+                statusDisplay.innerHTML = '<strong style="color: var(--red);">Your trial has expired.</strong> Please upgrade to continue.';
+            } else if (daysLeft <= 7) {
+                statusDisplay.innerHTML = `You have <strong style="color: var(--amber);">${daysLeft}</strong> day${daysLeft !== 1 ? 's' : ''} left in your free trial.`;
+            }
+        }
+    }
+
+    async getSubscriptionStatus() {
+        try {
+            const { data, error } = await supabase.from('subscriptions').select('*').eq('company_id', this.currentUser.company_id).maybeSingle();
+            if (error || !data) return { status: 'none', daysLeft: 0, plan: 'free' };
+            const daysLeft = Math.ceil((new Date(data.trial_end) - new Date()) / (1000 * 60 * 60 * 24));
+            return { status: data.status, daysLeft: Math.max(0, daysLeft), plan: data.plan || 'trial', employees: data.employee_count || 5 };
+        } catch { return { status: 'none', daysLeft: 0, plan: 'free' }; }
+    }
+
+    async updateSubscriptionStatusCard(daysLeft) {
+        const card = document.getElementById('subscription-status-card');
+        const badge = document.getElementById('plan-badge');
+        const info = document.getElementById('trial-info');
+        
+        if (!card) return;
+        
+        card.style.display = 'block';
+        
+        if (daysLeft <= 0) {
+            badge.innerText = '⏰ Trial Expired';
+            badge.style.color = 'var(--red)';
+            if (info) info.innerText = 'Your free trial has ended. Please upgrade to continue.';
+        } else if (daysLeft <= 7) {
+            badge.innerText = `⚠️ ${daysLeft} Day${daysLeft !== 1 ? 's' : ''} Left`;
+            badge.style.color = 'var(--amber)';
+            if (info) info.innerText = `Your free trial expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}.`;
+        } else {
+            badge.innerText = `✓ ${daysLeft} Days Left`;
+            badge.style.color = 'var(--green)';
+            if (info) info.innerText = `Enjoy your free trial! You have ${daysLeft} days remaining.`;
+        }
     }
     toggleEmployeeHistory(username) {
         const el = document.getElementById(`history-${username}`);

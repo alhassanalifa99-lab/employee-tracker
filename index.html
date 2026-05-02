@@ -67,6 +67,10 @@
                 <span class="reg-icon">🏢</span>Register Company
             </button>
         </div>
+
+        <div style="margin-top:24px; padding-top:16px; border-top:1px solid var(--border);">
+            <button class="btn btn-outline" style="width:100%; font-size:0.8rem;" onclick="if(confirm('Reset all data for fresh start?')) app.resetDatabase()">🔄 Reset Database (Dev)</button>
+        </div>
     </div>
 
     <!-- ── VERIFY VIEW ── -->
@@ -145,21 +149,269 @@
 
     <!-- ── SUBSCRIPTION VIEW ── -->
     <div id="view-subscription" class="view" data-title="SUBSCRIPTION">
-        <div class="card" style="text-align:center;">
-            <h2 style="justify-content:center; margin-bottom:16px;">Subscription Required</h2>
-            <p style="color:var(--text-muted); font-size:0.88rem; margin-bottom:24px; line-height:1.6;">
-                Your trial period has ended. Please upgrade your plan to continue using Employee Tracker.
+        <div class="card">
+            <h2 style="justify-content:center; margin-bottom:8px;">⏰ Trial Period</h2>
+            <p id="trial-status" style="text-align:center; color:var(--text-muted); font-size:0.88rem; margin-bottom:24px;">
+                You have <strong id="trial-days-left">30</strong> days left in your free trial.
             </p>
-            <div style="margin:24px 0; padding:16px; background:rgba(255,193,7,0.1); border-radius:8px; border-left:4px solid var(--amber);">
-                <p style="font-size:0.9rem; color:var(--text-muted);">Contact support for billing inquiries or choose a plan below.</p>
+        </div>
+
+        <div class="pricing-container">
+            <!-- Free Trial Plan -->
+            <div class="pricing-card current">
+                <div class="pricing-badge">Current Plan</div>
+                <h3 class="plan-name">🎁 Free Trial</h3>
+                <div class="plan-price"><span>GH₵</span>0</div>
+                <p class="plan-duration">1 Month Free</p>
+                <ul class="plan-features">
+                    <li>✓ Up to 5 employees</li>
+                    <li>✓ Unlimited check-ins</li>
+                    <li>✓ Real-time dashboard</li>
+                    <li>✓ Multi-site management</li>
+                    <li>✓ Activity logs</li>
+                </ul>
+                <button class="btn btn-outline" disabled>Active</button>
             </div>
-            <button class="btn btn-primary" onclick="if(window.app) app.initiatePayment('Starter', 9900, 5)">Upgrade to Starter (GH₵99)</button>
-            <button class="btn btn-outline" style="margin-top:10px;" onclick="if(window.app) app.logout()">Back to Login</button>
+
+            <!-- 1-5 Employees -->
+            <div class="pricing-card">
+                <h3 class="plan-name">👥 1-5 Employees</h3>
+                <div class="plan-price"><span>GH₵</span>150<span class="period">/month</span></div>
+                <p class="plan-duration">Perfect for startups</p>
+                <ul class="plan-features">
+                    <li>✓ Up to 5 employees</li>
+                    <li>✓ Unlimited check-ins</li>
+                    <li>✓ Real-time dashboard</li>
+                    <li>✓ Multi-site management</li>
+                    <li>✓ Activity logs</li>
+                </ul>
+                <button class="btn btn-primary" onclick="if(window.app) app.initiatePayment('1-5 Employees', 15000, 5)">Subscribe Now</button>
+            </div>
+
+            <!-- 5-10 Employees -->
+            <div class="pricing-card">
+                <h3 class="plan-name">👥 5-10 Employees</h3>
+                <div class="plan-price"><span>GH₵</span>200<span class="period">/month</span></div>
+                <p class="plan-duration">Growing teams</p>
+                <ul class="plan-features">
+                    <li>✓ Up to 10 employees</li>
+                    <li>✓ Unlimited check-ins</li>
+                    <li>✓ Real-time dashboard</li>
+                    <li>✓ Multi-site management</li>
+                    <li>✓ Activity logs</li>
+                </ul>
+                <button class="btn btn-primary" onclick="if(window.app) app.initiatePayment('5-10 Employees', 20000, 10)">Subscribe Now</button>
+            </div>
+
+            <!-- 10-20 Employees -->
+            <div class="pricing-card">
+                <div class="pricing-badge popular">Popular</div>
+                <h3 class="plan-name">👥 10-20 Employees</h3>
+                <div class="plan-price"><span>GH₵</span>300<span class="period">/month</span></div>
+                <p class="plan-duration">Most popular tier</p>
+                <ul class="plan-features">
+                    <li>✓ Up to 20 employees</li>
+                    <li>✓ Unlimited check-ins</li>
+                    <li>✓ Real-time dashboard</li>
+                    <li>✓ Multi-site management</li>
+                    <li>✓ Activity logs</li>
+                    <li>✓ Priority support</li>
+                </ul>
+                <button class="btn btn-primary" onclick="if(window.app) app.initiatePayment('10-20 Employees', 30000, 20)">Subscribe Now</button>
+            </div>
+
+            <!-- 20-50 Employees -->
+            <div class="pricing-card">
+                <h3 class="plan-name">👥 20-50 Employees</h3>
+                <div class="plan-price"><span>GH₵</span>400<span class="period">/month</span></div>
+                <p class="plan-duration">Medium business</p>
+                <ul class="plan-features">
+                    <li>✓ Up to 50 employees</li>
+                    <li>✓ Unlimited check-ins</li>
+                    <li>✓ Real-time dashboard</li>
+                    <li>✓ Multi-site management</li>
+                    <li>✓ Advanced analytics</li>
+                    <li>✓ 24/7 support</li>
+                </ul>
+                <button class="btn btn-primary" onclick="if(window.app) app.initiatePayment('20-50 Employees', 40000, 50)">Subscribe Now</button>
+            </div>
+
+            <!-- 50-100 Employees -->
+            <div class="pricing-card">
+                <h3 class="plan-name">👥 50-100 Employees</h3>
+                <div class="plan-price"><span>GH₵</span>500<span class="period">/month</span></div>
+                <p class="plan-duration">Growing enterprise</p>
+                <ul class="plan-features">
+                    <li>✓ Up to 100 employees</li>
+                    <li>✓ Unlimited check-ins</li>
+                    <li>✓ Real-time dashboard</li>
+                    <li>✓ Multi-site management</li>
+                    <li>✓ Advanced analytics</li>
+                    <li>✓ API access</li>
+                    <li>✓ 24/7 support</li>
+                </ul>
+                <button class="btn btn-primary" onclick="if(window.app) app.initiatePayment('50-100 Employees', 50000, 100)">Subscribe Now</button>
+            </div>
+
+            <!-- 100+ Employees -->
+            <div class="pricing-card">
+                <h3 class="plan-name">👥 100+ Employees</h3>
+                <div class="plan-price"><span>GH₵</span>700<span class="period">/month</span></div>
+                <p class="plan-duration">Enterprise plan</p>
+                <ul class="plan-features">
+                    <li>✓ Unlimited employees</li>
+                    <li>✓ Unlimited check-ins</li>
+                    <li>✓ Real-time dashboard</li>
+                    <li>✓ Multi-site management</li>
+                    <li>✓ Advanced analytics</li>
+                    <li>✓ Full API access</li>
+                    <li>✓ Dedicated support</li>
+                </ul>
+                <button class="btn btn-primary" onclick="if(window.app) app.initiatePayment('100+ Employees', 70000, 999)">Subscribe Now</button>
+            </div>
+        </div>
+
+        <div class="card" style="text-align:center; margin-top:24px;">
+            <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:16px;">Need a custom plan? Contact us for enterprise pricing</p>
+            <button class="btn btn-outline" onclick="if(window.app) app.logout()">Back to Login</button>
+        </div>
+    </div>
+
+    <!-- ── PLAN SELECTION (After Registration) ── -->
+    <div id="view-select-plan" class="view" data-title="SELECT YOUR PLAN">
+        <div class="card" style="text-align:center;">
+            <h2 style="justify-content:center; margin-bottom:8px;">🎯 Choose Your Plan</h2>
+            <p style="color:var(--text-muted); font-size:0.88rem; margin-bottom:24px; line-height:1.6;">
+                Start with a 1-month free trial. Upgrade anytime as your team grows.
+            </p>
+        </div>
+
+        <div class="pricing-container" style="margin: 0 auto; max-width: 100%;">
+            <!-- 1-5 Employees -->
+            <div class="pricing-card">
+                <h3 class="plan-name">👥 1-5 Employees</h3>
+                <div class="plan-price"><span>GH₵</span>150<span class="period">/month</span></div>
+                <p class="plan-duration">Perfect for startups</p>
+                <ul class="plan-features" style="font-size:0.85rem;">
+                    <li>✓ Up to 5 employees</li>
+                    <li>✓ Unlimited check-ins</li>
+                    <li>✓ Real-time dashboard</li>
+                </ul>
+                <button class="btn btn-primary" onclick="app.selectPlanAndContinue(5, '1-5 Employees')">Select Plan</button>
+            </div>
+
+            <!-- 5-10 Employees -->
+            <div class="pricing-card">
+                <h3 class="plan-name">👥 5-10 Employees</h3>
+                <div class="plan-price"><span>GH₵</span>200<span class="period">/month</span></div>
+                <p class="plan-duration">Growing teams</p>
+                <ul class="plan-features" style="font-size:0.85rem;">
+                    <li>✓ Up to 10 employees</li>
+                    <li>✓ Unlimited check-ins</li>
+                    <li>✓ Real-time dashboard</li>
+                </ul>
+                <button class="btn btn-primary" onclick="app.selectPlanAndContinue(10, '5-10 Employees')">Select Plan</button>
+            </div>
+
+            <!-- 10-20 Employees -->
+            <div class="pricing-card">
+                <div class="pricing-badge popular">Popular</div>
+                <h3 class="plan-name">👥 10-20 Employees</h3>
+                <div class="plan-price"><span>GH₵</span>300<span class="period">/month</span></div>
+                <p class="plan-duration">Most popular</p>
+                <ul class="plan-features" style="font-size:0.85rem;">
+                    <li>✓ Up to 20 employees</li>
+                    <li>✓ Unlimited check-ins</li>
+                    <li>✓ Real-time dashboard</li>
+                </ul>
+                <button class="btn btn-primary" onclick="app.selectPlanAndContinue(20, '10-20 Employees')">Select Plan</button>
+            </div>
+
+            <!-- 20-50 Employees -->
+            <div class="pricing-card">
+                <h3 class="plan-name">👥 20-50 Employees</h3>
+                <div class="plan-price"><span>GH₵</span>400<span class="period">/month</span></div>
+                <p class="plan-duration">Medium business</p>
+                <ul class="plan-features" style="font-size:0.85rem;">
+                    <li>✓ Up to 50 employees</li>
+                    <li>✓ Unlimited check-ins</li>
+                    <li>✓ Advanced analytics</li>
+                </ul>
+                <button class="btn btn-primary" onclick="app.selectPlanAndContinue(50, '20-50 Employees')">Select Plan</button>
+            </div>
+        </div>
+
+        <div class="card" style="text-align:center; margin-top:24px;">
+            <p style="font-size:0.8rem; color:var(--text-muted);">Not sure? Start with Free Trial and upgrade anytime</p>
+            <button class="btn btn-outline" onclick="app.selectPlanAndContinue(5, 'Free Trial')">Start Free Trial →</button>
+        </div>
+    </div>
+
+    <!-- ── PRICING VIEW (During Registration) ── -->
+    <div id="view-pricing" class="view" data-title="PRICING & TRIAL">
+        <div class="card" style="text-align:center;">
+            <h2 style="justify-content:center; margin-bottom:8px;">🎉 Welcome!</h2>
+            <p style="color:var(--text-muted); font-size:0.88rem; margin-bottom:24px; line-height:1.6;">
+                Your workspace is ready. You have <strong>1 month free trial</strong> to explore all features.
+            </p>
+        </div>
+
+        <div class="pricing-container">
+            <!-- Free Trial Plan -->
+            <div class="pricing-card current">
+                <div class="pricing-badge">Starting Plan</div>
+                <h3 class="plan-name">🎁 Free Trial</h3>
+                <div class="plan-price"><span>GH₵</span>0</div>
+                <p class="plan-duration">1 Month Free</p>
+                <ul class="plan-features" style="font-size:0.85rem;">
+                    <li>✓ Up to 5 employees</li>
+                    <li>✓ Unlimited check-ins</li>
+                    <li>✓ Real-time dashboard</li>
+                    <li>✓ Multi-site management</li>
+                    <li>✓ Activity logs</li>
+                </ul>
+                <button class="btn btn-primary" onclick="app.showView('view-manager'); app.refreshDashboard();">Get Started</button>
+            </div>
+
+            <!-- 10-20 Employees Plan (Most Popular for new users) -->
+            <div class="pricing-card">
+                <div class="pricing-badge popular">Popular Upgrade</div>
+                <h3 class="plan-name">👥 10-20 Employees</h3>
+                <div class="plan-price"><span>GH₵</span>300<span class="period">/month</span></div>
+                <p class="plan-duration">After trial expires</p>
+                <ul class="plan-features" style="font-size:0.85rem;">
+                    <li>✓ Up to 20 employees</li>
+                    <li>✓ Priority support</li>
+                    <li>✓ All free features +</li>
+                    <li style="color: var(--green);">More capacity & analytics</li>
+                </ul>
+                <button class="btn btn-outline" onclick="app.showView('view-subscription')">See All Plans</button>
+            </div>
+        </div>
+
+        <div class="card" style="text-align:center; margin-top:24px;">
+            <p style="font-size:0.8rem; color:var(--text-muted);">No credit card required • Cancel anytime • Upgrade anytime</p>
+            <button class="btn btn-outline" onclick="app.showView('view-auth')" style="margin-top:12px;">← Back</button>
         </div>
     </div>
 
     <!-- ── MANAGER DASHBOARD ── -->
     <div id="view-manager" class="view">
+
+        <!-- Subscription Status -->
+        <div id="subscription-status-card" style="display:none;">
+            <p class="section-label">Subscription</p>
+            <div class="card">
+                <h2 style="justify-content:space-between;">
+                    <span><span class="h2-icon">💳</span> Plan Status</span>
+                    <span id="plan-badge" style="font-size:0.85rem; color:var(--green);">Trial Active</span>
+                </h2>
+                <div id="subscription-info" style="font-size:0.88rem; color:var(--text-mid); margin-bottom:16px;">
+                    <p id="trial-info">Free trial active</p>
+                </div>
+                <button class="btn btn-outline" onclick="app.showView('view-subscription')" style="width:100%;">View Plans & Upgrade</button>
+            </div>
+        </div>
 
         <!-- Live Team Status -->
         <p class="section-label">Live Status</p>

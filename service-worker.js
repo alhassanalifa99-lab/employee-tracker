@@ -1,10 +1,15 @@
-const CACHE_NAME = 'et-app-v1';
+const CACHE_NAME = 'et-app-v2';
 const ASSETS = [
     './',
     './index.html',
     './style.css',
     './script.js',
-    './manifest.json'
+    './manifest.json',
+    './icons/icon-192.png',
+    './icons/icon-512.png',
+    './icons/icon-512-maskable.png',
+    './icons/screenshot-wide.png',
+    './icons/screenshot-narrow.png'
 ];
 
 // Install Event - cache core assets

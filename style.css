@@ -138,6 +138,63 @@ body::after {
 
 .view.active { display: flex; }
 
+/* ── Manager dashboard: full-width, stack on small screens; sidebar + main on wide ── */
+.view-manager {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    flex-direction: column;
+}
+
+.view-manager .manager-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.view-manager .manager-main,
+.view-manager .manager-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.view-manager .manager-main .card,
+.view-manager .manager-sidebar .card {
+    max-width: 100%;
+    min-width: 0;
+}
+
+.view-manager #employee-list,
+.view-manager #site-list-display,
+.view-manager #team-list-container {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.view-manager .site-item,
+.view-manager .team-member-item {
+    flex-wrap: wrap;
+    gap: 10px;
+    max-width: 100%;
+}
+
+.view-manager .site-item > div:first-child,
+.view-manager .team-member-item > div:first-child {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
 @keyframes fadeUp {
     from { opacity: 0; transform: translateY(16px); }
     to   { opacity: 1; transform: translateY(0); }
@@ -781,23 +838,35 @@ select option { background: var(--surface-2); }
 ═══════════════════════════════════════ */
 @media (min-width: 768px) {
 
+    html {
+        overflow-x: hidden;
+        overflow-y: auto;
+        height: auto;
+        min-height: 100%;
+    }
+
     body {
         display: block !important;
-        height: 100vh;
-        overflow: hidden;
+        min-height: 100vh;
+        min-height: 100dvh;
+        overflow-x: hidden;
+        overflow-y: auto;
         padding: 0;
     }
 
     .app-container {
         width: 100% !important;
-        max-width: 100% !important;
-        height: 100vh !important;
+        max-width: 100vw !important;
+        min-height: 100vh;
+        min-height: 100dvh;
+        height: auto;
         display: flex !important;
         flex-direction: column !important;
         padding: 0;
         margin: 0;
         border-radius: 0;
         border: none;
+        box-sizing: border-box;
     }
 
     .app-header {
@@ -929,101 +998,71 @@ select option { background: var(--surface-2); }
         border-right: 1px solid var(--border);
     }
 
-    /* ── MANAGER DASHBOARD ── */
+    /* ── MANAGER DASHBOARD ── document scroll (no trapped inner scroll) */
     #view-manager.active {
-        display: grid !important;
-        grid-template-columns: 280px 1fr 1fr;
-        grid-template-rows: auto auto auto auto 1fr auto;
-        flex: 1;
-        padding: 0;
-        gap: 0;
-        height: calc(100vh - 73px);
-        overflow: hidden;
-        align-items: start;
-    }
-
-    #view-manager .section-label:nth-of-type(1) {
-        grid-column: 1; grid-row: 1;
-        padding: 24px 24px 8px;
-        border-right: 1px solid var(--border);
-    }
-
-    #view-manager .card:nth-of-type(1) {
-        grid-column: 2 / 4; grid-row: 1;
-        border-radius: 0; border: none;
-        border-bottom: 1px solid var(--border);
-        max-height: 260px; overflow-y: auto;
-        z-index: 5;
-    }
-
-    #view-manager .section-label:nth-of-type(2) {
-        grid-column: 2; grid-row: 2;
-        padding: 20px 24px 8px;
-        border-bottom: 1px solid var(--border);
-        border-right: 1px solid var(--border);
-    }
-
-    #view-manager .card:nth-of-type(2) {
-        grid-column: 2; grid-row: 3 / 6;
-        border-radius: 0; border: none;
-        border-right: 1px solid var(--border);
-        overflow-y: auto; align-self: stretch;
-        z-index: 2;
-    }
-
-    #view-manager .section-label:nth-of-type(3) {
-        grid-column: 3; grid-row: 2;
-        padding: 20px 24px 8px;
-        border-bottom: 1px solid var(--border);
-    }
-
-    #view-manager .card:nth-of-type(3) {
-        grid-column: 3; grid-row: 3 / 5;
-        border-radius: 0; border: none;
-        border-bottom: 1px solid var(--border);
-        overflow-y: auto;
-        min-height: 240px;
-    }
-
-    #view-manager .section-label:nth-of-type(4),
-    #view-manager .section-label:nth-of-type(5) {
-        grid-column: 1;
-        border-right: 1px solid var(--border);
-        padding: 16px 24px 6px;
-    }
-
-    #view-manager .card:nth-of-type(4) {
-        grid-column: 1; grid-row: 2 / 6;
-        border-radius: 0; border: none;
-        border-right: 1px solid var(--border);
-        border-bottom: 1px solid var(--border);
-        overflow-y: auto; padding: 20px;
-    }
-
-    #view-manager .card:nth-of-type(5) {
-        grid-column: 3; grid-row: 4 / 6;
-        border-radius: 0; border: none;
-        overflow-y: auto; align-self: stretch;
-    }
-
-    #view-manager .btn.btn-outline:not(.btn-sm) {
-        grid-column: 1 / 4;
-        grid-row: 7;
-        border-radius: 0;
-        border: none;
-        border-top: 1px solid var(--border);
+        display: flex !important;
+        flex-direction: column;
+        flex: 0 0 auto;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
         margin: 0;
-        align-self: end;
-        z-index: 10;
+        padding: 16px clamp(12px, 3vw, 28px) 48px;
+        overflow-x: hidden;
+        overflow-y: visible;
+        gap: 12px;
+        box-sizing: border-box;
     }
 
-   #view-manager .debug-controls {
-    grid-column: 2 / 4; grid-row: 6;
-        border-radius: 0; border: none;
-        border-top: 1px solid var(--border);
-        border-right: 1px solid var(--border);
-        margin: 0; padding: 12px 20px;
-        align-self: end;
+    #view-manager.active > #subscription-status-card {
+        flex: 0 0 auto;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+    }
+
+    #view-manager.active > .manager-layout {
+        flex: 0 1 auto;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+    }
+
+    @media (min-width: 900px) {
+        #view-manager.active > .manager-layout {
+            display: grid;
+            grid-template-columns: minmax(0, min(340px, 36vw)) minmax(0, 1fr);
+            grid-template-rows: minmax(0, auto);
+            align-items: start;
+            column-gap: clamp(16px, 2.5vw, 28px);
+            row-gap: 12px;
+        }
+
+        #view-manager.active .manager-sidebar {
+            grid-column: 1;
+            grid-row: 1;
+        }
+
+        #view-manager.active .manager-main {
+            grid-column: 2;
+            grid-row: 1;
+        }
+    }
+
+    #view-manager.active > .btn.btn-outline:not(.btn-sm) {
+        margin-top: 8px;
+        align-self: stretch;
+        max-width: 100%;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    #view-manager.active > .debug-controls {
+        margin-top: 8px;
+        flex: 0 0 auto;
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
     }
 
     /* ── EMPLOYEE DASHBOARD ── */
@@ -1036,7 +1075,8 @@ select option { background: var(--surface-2); }
         gap: 0;
         height: calc(100vh - 73px);
         align-items: start;
-        overflow: hidden;
+        overflow-x: hidden;
+        overflow-y: auto;
     }
 
     #view-employee .status-indicator {
@@ -1232,15 +1272,13 @@ select option { background: var(--surface-2); }
 }
 
 /* ═══════════════════════════════════════
-   SUBSCRIPTION VIEWS (DESKTOP)
+   SUBSCRIPTION / PRICING VIEWS (DESKTOP)
 ═══════════════════════════════════════ */
 @media (min-width: 768px) {
-    #view-subscription.active,
-    #view-pricing.active,
-    #view-select-plan.active {
+    #view-subscription.active {
         display: grid !important;
-        grid-template-columns: 1fr 1fr;
-        grid-template-rows: 1fr;
+        grid-template-columns: minmax(280px, 380px) 1fr;
+        grid-template-rows: 1fr auto;
         flex: 1;
         padding: 0;
         gap: 0;
@@ -1248,71 +1286,59 @@ select option { background: var(--surface-2); }
         overflow: hidden;
     }
 
-    #view-subscription .card:first-child {
+    #view-subscription.active > .card:first-of-type {
         grid-column: 1;
-        grid-row: 1;
+        grid-row: 1 / -1;
         display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
         border-radius: 0;
         border: none;
         border-right: 1px solid var(--border);
-        padding: 80px 48px;
+        padding: 48px 40px;
         text-align: center;
         overflow-y: auto;
+        min-height: 0;
     }
 
-    #view-subscription .pricing-container {
+    #view-subscription.active > .pricing-container {
         grid-column: 2;
         grid-row: 1;
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 16px;
-        padding: 40px 32px;
+        padding: 28px 28px 16px;
+        margin: 0;
         overflow-y: auto;
         align-content: start;
+        min-height: 0;
     }
 
-    #view-subscription .card:last-child {
+    #view-subscription.active > .card:last-of-type {
         grid-column: 2;
-        grid-row: 1;
-        align-self: end;
-    }
-
-    #view-pricing .card:first-child {
-        grid-column: 1 / 3;
-        grid-row: 1;
+        grid-row: 2;
         border-radius: 0;
         border: none;
-        border-bottom: 1px solid var(--border);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 32px 48px;
-        text-align: center;
+        border-top: 1px solid var(--border);
+        margin: 0;
+        padding: 20px 28px;
     }
 
-    #view-pricing .pricing-container {
-        grid-column: 1 / 3;
-        grid-row: 1;
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 16px;
-        padding: 40px 48px;
-        overflow-y: auto;
-        align-content: start;
-        margin-top: 100px;
+    #view-pricing.active,
+    #view-select-plan.active {
+        display: flex !important;
+        flex-direction: column;
+        flex: 1;
+        padding: 0;
+        gap: 0;
+        height: calc(100vh - 73px);
+        overflow: hidden;
     }
 
-    #view-pricing .card:last-child {
-        grid-column: 1 / 3;
-        grid-row: 1;
-        align-self: end;
-    }
-
-    #view-select-plan .card:first-child {
-        grid-column: 1 / 3;
-        grid-row: 1;
+    #view-pricing.active > .card:first-of-type,
+    #view-select-plan.active > .card:first-of-type {
+        flex: 0 0 auto;
         border-radius: 0;
         border: none;
         border-bottom: 1px solid var(--border);
@@ -1320,25 +1346,30 @@ select option { background: var(--surface-2); }
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        padding: 32px 48px;
+        padding: 28px 48px;
         text-align: center;
     }
 
-    #view-select-plan .pricing-container {
-        grid-column: 1 / 3;
-        grid-row: 1;
+    #view-pricing.active > .pricing-container,
+    #view-select-plan.active > .pricing-container {
+        flex: 1 1 auto;
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 12px;
-        padding: 40px 48px;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 16px;
+        padding: 24px 32px;
+        margin: 0;
         overflow-y: auto;
         align-content: start;
-        margin-top: 80px;
+        min-height: 0;
     }
 
-    #view-select-plan .card:last-child {
-        grid-column: 1 / 3;
-        grid-row: 1;
-        align-self: end;
+    #view-pricing.active > .card:last-of-type,
+    #view-select-plan.active > .card:last-of-type {
+        flex: 0 0 auto;
+        border-radius: 0;
+        border: none;
+        border-top: 1px solid var(--border);
+        margin: 0;
+        padding: 20px 28px;
     }
 }

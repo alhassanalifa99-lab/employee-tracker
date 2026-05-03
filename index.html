@@ -2,13 +2,17 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#00e87a">
+    <meta name="description" content="Geofenced check-ins, live team visibility, and multi-site management for your workforce.">
     <title>Employee Tracker</title>
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
+    <script src="https://js.paystack.co/v1/inline.js"></script>
 </head>
 <body>
 
@@ -54,7 +58,7 @@
                 <input type="password" id="auth-passcode" placeholder="••••••" autocomplete="current-password">
             </div>
             <button class="btn btn-primary" onclick="app.login()">Sign In</button>
-            <button id="auth-biometric-btn" class="btn btn-outline" style="margin-top:10px; display:none;" onclick="app.loginWithBiometrics()">Use Biometrics</button>
+            <button id="auth-biometric-btn" class="btn btn-outline" style="display:none; margin-top:8px;" onclick="app.loginWithBiometrics()">🔐 Sign in with Biometrics</button>
         </div>
 
         <div class="divider"><span>New here?</span></div>
@@ -66,10 +70,6 @@
             <button class="register-btn" onclick="app.showView('view-register')">
                 <span class="reg-icon">🏢</span>Register Company
             </button>
-        </div>
-
-        <div style="margin-top:24px; padding-top:16px; border-top:1px solid var(--border);">
-            <button class="btn btn-outline" style="width:100%; font-size:0.8rem;" onclick="if(confirm('Reset all data for fresh start?')) app.resetDatabase()">🔄 Reset Database (Dev)</button>
         </div>
     </div>
 
@@ -157,117 +157,70 @@
         </div>
 
         <div class="pricing-container">
-            <!-- Free Trial Plan -->
-            <div class="pricing-card current">
-                <div class="pricing-badge">Current Plan</div>
-                <h3 class="plan-name">🎁 Free Trial</h3>
-                <div class="plan-price"><span>GH₵</span>0</div>
-                <p class="plan-duration">1 Month Free</p>
-                <ul class="plan-features">
-                    <li>✓ Up to 5 employees</li>
-                    <li>✓ Unlimited check-ins</li>
-                    <li>✓ Real-time dashboard</li>
-                    <li>✓ Multi-site management</li>
-                    <li>✓ Activity logs</li>
-                </ul>
-                <button class="btn btn-outline" disabled>Active</button>
-            </div>
-
-            <!-- 1-5 Employees -->
             <div class="pricing-card">
-                <h3 class="plan-name">👥 1-5 Employees</h3>
-                <div class="plan-price"><span>GH₵</span>150<span class="period">/month</span></div>
-                <p class="plan-duration">Perfect for startups</p>
-                <ul class="plan-features">
-                    <li>✓ Up to 5 employees</li>
-                    <li>✓ Unlimited check-ins</li>
-                    <li>✓ Real-time dashboard</li>
-                    <li>✓ Multi-site management</li>
-                    <li>✓ Activity logs</li>
-                </ul>
-                <button class="btn btn-primary" onclick="if(window.app) app.initiatePayment('1-5 Employees', 15000, 5)">Subscribe Now</button>
-            </div>
-
-            <!-- 5-10 Employees -->
-            <div class="pricing-card">
-                <h3 class="plan-name">👥 5-10 Employees</h3>
-                <div class="plan-price"><span>GH₵</span>200<span class="period">/month</span></div>
-                <p class="plan-duration">Growing teams</p>
+                <h3 class="plan-name">Starter</h3>
+                <div class="plan-price"><span>GH₵</span>150<span class="period">/mo</span></div>
+                <p class="plan-duration">1–10 employees</p>
                 <ul class="plan-features">
                     <li>✓ Up to 10 employees</li>
                     <li>✓ Unlimited check-ins</li>
                     <li>✓ Real-time dashboard</li>
                     <li>✓ Multi-site management</li>
-                    <li>✓ Activity logs</li>
                 </ul>
-                <button class="btn btn-primary" onclick="if(window.app) app.initiatePayment('5-10 Employees', 20000, 10)">Subscribe Now</button>
+                <button type="button" class="btn btn-primary" onclick="if(window.app) app.initiatePayment('Starter', 15000000, 10)">Subscribe</button>
             </div>
 
-            <!-- 10-20 Employees -->
             <div class="pricing-card">
-                <div class="pricing-badge popular">Popular</div>
-                <h3 class="plan-name">👥 10-20 Employees</h3>
-                <div class="plan-price"><span>GH₵</span>300<span class="period">/month</span></div>
-                <p class="plan-duration">Most popular tier</p>
+                <h3 class="plan-name">Basic</h3>
+                <div class="plan-price"><span>GH₵</span>200<span class="period">/mo</span></div>
+                <p class="plan-duration">10–20 employees</p>
                 <ul class="plan-features">
                     <li>✓ Up to 20 employees</li>
                     <li>✓ Unlimited check-ins</li>
                     <li>✓ Real-time dashboard</li>
-                    <li>✓ Multi-site management</li>
                     <li>✓ Activity logs</li>
-                    <li>✓ Priority support</li>
                 </ul>
-                <button class="btn btn-primary" onclick="if(window.app) app.initiatePayment('10-20 Employees', 30000, 20)">Subscribe Now</button>
+                <button type="button" class="btn btn-primary" onclick="if(window.app) app.initiatePayment('Basic', 20000000, 20)">Subscribe</button>
             </div>
 
-            <!-- 20-50 Employees -->
             <div class="pricing-card">
-                <h3 class="plan-name">👥 20-50 Employees</h3>
-                <div class="plan-price"><span>GH₵</span>400<span class="period">/month</span></div>
-                <p class="plan-duration">Medium business</p>
+                <div class="pricing-badge popular">Popular</div>
+                <h3 class="plan-name">Growth</h3>
+                <div class="plan-price"><span>GH₵</span>300<span class="period">/mo</span></div>
+                <p class="plan-duration">20–50 employees</p>
                 <ul class="plan-features">
                     <li>✓ Up to 50 employees</li>
                     <li>✓ Unlimited check-ins</li>
                     <li>✓ Real-time dashboard</li>
-                    <li>✓ Multi-site management</li>
-                    <li>✓ Advanced analytics</li>
-                    <li>✓ 24/7 support</li>
+                    <li>✓ Priority support</li>
                 </ul>
-                <button class="btn btn-primary" onclick="if(window.app) app.initiatePayment('20-50 Employees', 40000, 50)">Subscribe Now</button>
+                <button type="button" class="btn btn-primary" onclick="if(window.app) app.initiatePayment('Growth', 30000000, 50)">Subscribe</button>
             </div>
 
-            <!-- 50-100 Employees -->
             <div class="pricing-card">
-                <h3 class="plan-name">👥 50-100 Employees</h3>
-                <div class="plan-price"><span>GH₵</span>500<span class="period">/month</span></div>
-                <p class="plan-duration">Growing enterprise</p>
+                <h3 class="plan-name">Pro</h3>
+                <div class="plan-price"><span>GH₵</span>400<span class="period">/mo</span></div>
+                <p class="plan-duration">50–100 employees</p>
                 <ul class="plan-features">
                     <li>✓ Up to 100 employees</li>
                     <li>✓ Unlimited check-ins</li>
-                    <li>✓ Real-time dashboard</li>
-                    <li>✓ Multi-site management</li>
                     <li>✓ Advanced analytics</li>
                     <li>✓ API access</li>
-                    <li>✓ 24/7 support</li>
                 </ul>
-                <button class="btn btn-primary" onclick="if(window.app) app.initiatePayment('50-100 Employees', 50000, 100)">Subscribe Now</button>
+                <button type="button" class="btn btn-primary" onclick="if(window.app) app.initiatePayment('Pro', 40000000, 100)">Subscribe</button>
             </div>
 
-            <!-- 100+ Employees -->
             <div class="pricing-card">
-                <h3 class="plan-name">👥 100+ Employees</h3>
-                <div class="plan-price"><span>GH₵</span>700<span class="period">/month</span></div>
-                <p class="plan-duration">Enterprise plan</p>
+                <h3 class="plan-name">Enterprise</h3>
+                <div class="plan-price"><span>GH₵</span>500<span class="period">/mo</span></div>
+                <p class="plan-duration">100+ employees</p>
                 <ul class="plan-features">
-                    <li>✓ Unlimited employees</li>
+                    <li>✓ 100+ employees</li>
                     <li>✓ Unlimited check-ins</li>
-                    <li>✓ Real-time dashboard</li>
-                    <li>✓ Multi-site management</li>
-                    <li>✓ Advanced analytics</li>
                     <li>✓ Full API access</li>
                     <li>✓ Dedicated support</li>
                 </ul>
-                <button class="btn btn-primary" onclick="if(window.app) app.initiatePayment('100+ Employees', 70000, 999)">Subscribe Now</button>
+                <button type="button" class="btn btn-primary" onclick="if(window.app) app.initiatePayment('Enterprise', 50000000, 999)">Subscribe</button>
             </div>
         </div>
 
@@ -396,7 +349,7 @@
     </div>
 
     <!-- ── MANAGER DASHBOARD ── -->
-    <div id="view-manager" class="view">
+    <div id="view-manager" class="view view-manager">
 
         <!-- Subscription Status -->
         <div id="subscription-status-card" style="display:none;">
@@ -413,77 +366,79 @@
             </div>
         </div>
 
-        <!-- Live Team Status -->
-        <p class="section-label">Live Status</p>
-        <div class="card card-accent">
-            <h2 style="cursor:pointer; justify-content:space-between;" onclick="app.togglePanel('team-body','team-icon')">
-                <span><span class="h2-icon">📊</span> Team Overview</span>
-                <span id="team-icon" style="font-size:1.2rem; color:var(--text-muted);">+</span>
-            </h2>
-            <div id="team-body" style="display:none;">
-                <div id="team-status-display">
-                    <p style="color:var(--text-muted); font-size:0.85rem;">No employees assigned yet.</p>
+        <div class="manager-layout">
+            <main class="manager-main" aria-label="Live dashboard">
+                <p class="section-label">Live Status</p>
+                <div class="card card-accent">
+                    <h2 style="cursor:pointer; justify-content:space-between;" onclick="app.togglePanel('team-body','team-icon')">
+                        <span><span class="h2-icon">📊</span> Team Overview</span>
+                        <span id="team-icon" style="font-size:1.2rem; color:var(--text-muted);">+</span>
+                    </h2>
+                    <div id="team-body" style="display:none;">
+                        <div id="team-status-display">
+                            <p style="color:var(--text-muted); font-size:0.85rem;">No employees assigned yet.</p>
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </div>
 
-        <!-- Activity Logs -->
-        <p class="section-label">Activity</p>
-        <div class="card">
-            <h2 style="cursor:pointer; justify-content:space-between;" onclick="app.togglePanel('activity-body','activity-icon')">
-                <span><span class="h2-icon">🕐</span> Recent Activity</span>
-                <span id="activity-icon" style="font-size:1.2rem; color:var(--text-muted);">+</span>
-            </h2>
-            <div id="activity-body" style="display:none;">
-                <div id="employee-list">
-                    <p style="color:var(--text-muted); font-size:0.85rem;">No activity yet.</p>
+                <p class="section-label">Activity</p>
+                <div class="card">
+                    <h2 style="cursor:pointer; justify-content:space-between;" onclick="app.togglePanel('activity-body','activity-icon')">
+                        <span><span class="h2-icon">🕐</span> Recent Activity</span>
+                        <span id="activity-icon" style="font-size:1.2rem; color:var(--text-muted);">+</span>
+                    </h2>
+                    <div id="activity-body" style="display:none;">
+                        <div id="employee-list">
+                            <p style="color:var(--text-muted); font-size:0.85rem;">No activity yet.</p>
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </div>
+            </main>
 
-        <!-- Sites -->
-        <p class="section-label">Worksites</p>
-        <div class="card">
-            <h2><span class="h2-icon">📍</span> Manage Sites</h2>
-            <div class="form-group">
-                <label>New Worksite Name</label>
-                <input type="text" id="new-site-name" placeholder="e.g. Headquarters">
-            </div>
-            <div id="manager-coords" class="coordinates-display" style="margin-bottom:12px;">📍 Waiting for GPS...</div>
-            <button class="btn btn-primary" onclick="app.createSite()">Set Location & Create</button>
-            <div id="site-list-display" style="margin-top:16px;"></div>
-        </div>
+            <aside class="manager-sidebar" aria-label="Sites and team">
+                <p class="section-label">Worksites</p>
+                <div class="card">
+                    <h2><span class="h2-icon">📍</span> Manage Sites</h2>
+                    <div class="form-group">
+                        <label>New Worksite Name</label>
+                        <input type="text" id="new-site-name" placeholder="e.g. Headquarters">
+                    </div>
+                    <div id="manager-coords" class="coordinates-display" style="margin-bottom:12px;">📍 Waiting for GPS...</div>
+                    <button class="btn btn-primary" onclick="app.createSite()">Set Location & Create</button>
+                    <div id="site-list-display" style="margin-top:16px;"></div>
+                </div>
 
-        <!-- Team Management -->
-        <p class="section-label">Team</p>
-        <div class="card">
-            <h2><span class="h2-icon">➕</span> Add / Link Employee</h2>
-            <div class="form-group">
-                <label>Assigned Worksite</label>
-                <select id="new-emp-site">
-                    <option value="" disabled selected>Select Worksite</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Employee Username</label>
-                <input type="text" id="new-emp-username" placeholder="Existing username">
-            </div>
-            <div class="form-group">
-                <label>Contact (Email or Phone)</label>
-                <input type="text" id="new-emp-contact" placeholder="Email or Phone">
-            </div>
-            <div class="form-group">
-                <label>Passcode (optional)</label>
-                <input type="text" id="new-emp-passcode" placeholder="Login PIN" maxlength="6">
-            </div>
-            <button class="btn btn-primary" onclick="app.registerEmployee()">Link Employee</button>
-        </div>
+                <p class="section-label">Team</p>
+                <div class="card">
+                    <h2><span class="h2-icon">➕</span> Add / Link Employee</h2>
+                    <div class="form-group">
+                        <label>Assigned Worksite</label>
+                        <select id="new-emp-site">
+                            <option value="" disabled selected>Select Worksite</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Employee Username</label>
+                        <input type="text" id="new-emp-username" placeholder="Existing username">
+                    </div>
+                    <div class="form-group">
+                        <label>Contact (Email or Phone)</label>
+                        <input type="text" id="new-emp-contact" placeholder="Email or Phone">
+                    </div>
+                    <div class="form-group">
+                        <label>Passcode (optional)</label>
+                        <input type="text" id="new-emp-passcode" placeholder="Login PIN" maxlength="6">
+                    </div>
+                    <button class="btn btn-primary" onclick="app.registerEmployee()">Link Employee</button>
+                </div>
 
-        <div class="card">
-            <h2><span class="h2-icon">👥</span> My Team</h2>
-            <div id="team-list-container">
-                <p style="color:var(--text-muted); font-size:0.85rem; text-align:center;">No employees yet.</p>
-            </div>
+                <div class="card">
+                    <h2><span class="h2-icon">👥</span> My Team</h2>
+                    <div id="team-list-container">
+                        <p style="color:var(--text-muted); font-size:0.85rem; text-align:center;">No employees yet.</p>
+                    </div>
+                </div>
+            </aside>
         </div>
 
         <button class="btn btn-outline" onclick="app.logout()" style="margin-top:4px;">Sign Out</button>
@@ -527,11 +482,8 @@
 
         <button class="btn btn-outline" onclick="app.logout()">Sign Out</button>
 
-        <div class="card">
-            <h2><span class="h2-icon">🔐</span> Security</h2>
-            <p id="biometric-status" class="text-sub" style="margin-bottom:12px;">Optional: enable biometric sign in for faster access.</p>
-            <button id="btn-enable-biometrics" class="btn btn-outline">Enable Biometrics</button>
-        </div>
+        <p id="biometric-status" style="font-size:0.78rem; color:var(--text-muted); text-align:center; margin-top:4px;"></p>
+        <button id="btn-enable-biometrics" class="btn btn-outline" style="display:none; font-size:0.82rem;">🔐 Enable Biometric Login</button>
 
         <div class="debug-controls">
             <div class="debug-title">🚧 Dev Tools</div>

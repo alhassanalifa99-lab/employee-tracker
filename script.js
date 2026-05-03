@@ -51,6 +51,16 @@ class HRApp {
                 this.currentUser = JSON.parse(storedUser);
                 const user = this.managers[this.currentUser.username] || this.employees[this.currentUser.username];
                 if (user) {
+                    if (user.role === 'manager' && user.company_id) {
+                        const { data: subRow } = await supabase.from('subscriptions').select('company_id').eq('company_id', user.company_id).maybeSingle();
+                        if (!subRow) {
+                            try {
+                                await this.createTrialSubscription(user.company_id);
+                            } catch (e) {
+                                console.error('Restored session: could not ensure subscription row', e);
+                            }
+                        }
+                    }
                     this.showView(this.currentUser.role === 'manager' ? 'view-manager' : 'view-employee');
                     this.refreshDashboard();
                 } else {
@@ -68,7 +78,8 @@ class HRApp {
 
     async resetDatabase() {
         if (!confirm('⚠️ WARNING: This will delete ALL data (managers, employees, sites, checkins, subscriptions).\n\nAre you absolutely sure?')) return;
-        if (!confirm('This action cannot be undone. Type OK to confirm.') && !prompt('Type OK to confirm') === 'OK') return;
+        if (!confirm('This action cannot be undone. Continue?')) return;
+        if (prompt('Type OK in the box below to confirm database reset:') !== 'OK') return;
         
         try {
             this.showToast({ message: 'Resetting database...', type: 'info' });
@@ -620,6 +631,18 @@ class HRApp {
 
         if (!user.company_id) return alert(`You are not linked to a company yet.\nAsk your Manager to register you using username: "${username}".`);
 
+        if (user.role === 'manager') {
+            const { data: existingSub } = await supabase.from('subscriptions').select('company_id').eq('company_id', companyId).maybeSingle();
+            if (!existingSub) {
+                try {
+                    await this.createTrialSubscription(companyId);
+                } catch (e) {
+                    console.error('Subscription setup failed:', e);
+                    return alert('Could not start billing trial for this workspace. Please try again or contact support.');
+                }
+            }
+        }
+
         if (user.role === 'employee') {
             const currentFingerprint = await this.generateDeviceFingerprint();
             if (user.device_fingerprint && user.device_fingerprint !== currentFingerprint) {
@@ -806,8 +829,14 @@ class HRApp {
         this.updateBiometricLoginButton();
         this.stopGeofenceWatchdog();
         if (this.timerInterval) clearInterval(this.timerInterval);
-        if (this.subscriptions.employees) supabase.removeChannel(this.subscriptions.employees);
-        if (this.subscriptions.checkins) supabase.removeChannel(this.subscriptions.checkins);
+        if (this.subscriptions.employees) {
+            supabase.removeChannel(this.subscriptions.employees);
+            this.subscriptions.employees = null;
+        }
+        if (this.subscriptions.checkins) {
+            supabase.removeChannel(this.subscriptions.checkins);
+            this.subscriptions.checkins = null;
+        }
     }
 
     // --- Geolocation ---
@@ -901,22 +930,27 @@ class HRApp {
         }
 
         const isDesktop = window.innerWidth >= 768;
+        const clearLayoutInline = () => {
+            ['display', 'grid-template-columns', 'grid-template-rows', 'height', 'padding', 'gap', 'overflow', 'align-items'].forEach((prop) => {
+                el.style.removeProperty(prop);
+            });
+        };
         if (isDesktop) {
-            if (viewId === 'view-manager') {
-                el.style.display = 'grid'; el.style.gridTemplateColumns = '280px 1fr 1fr'; el.style.gridTemplateRows = 'auto auto auto auto 1fr auto';
-                el.style.height = 'calc(100vh - 73px)'; el.style.padding = '0';
-                el.style.gap = '0'; el.style.overflow = 'hidden'; el.style.alignItems = 'start';
-            } else if (viewId === 'view-employee') {
-                el.style.display = 'grid'; el.style.gridTemplateColumns = '1fr 1fr';
-                el.style.height = 'calc(100vh - 73px)'; el.style.padding = '0';
-                el.style.gap = '0'; el.style.alignItems = 'start'; el.style.overflow = 'hidden';
+            if (viewId === 'view-manager' || viewId === 'view-employee') {
+                clearLayoutInline();
             } else {
-                el.style.display = 'grid'; el.style.gridTemplateColumns = '1fr 1fr';
-                el.style.height = 'calc(100vh - 73px)'; el.style.padding = '0'; el.style.gap = '0';
+                el.style.display = 'grid';
+                el.style.gridTemplateColumns = '1fr 1fr';
+                el.style.height = 'calc(100vh - 73px)';
+                el.style.padding = '0';
+                el.style.gap = '0';
             }
         } else {
-            el.style.display = 'flex'; el.style.flexDirection = 'column';
-            el.style.gap = '12px'; el.style.padding = '0 16px'; el.style.height = '';
+            clearLayoutInline();
+            el.style.display = 'flex';
+            el.style.flexDirection = 'column';
+            el.style.gap = '12px';
+            el.style.padding = '0 16px';
         }
 
         if (viewId === 'view-auth') this.updateBiometricLoginButton();
@@ -1181,12 +1215,15 @@ class HRApp {
                     return;
                 }
                 // Show trial warning if less than 7 days
-                this.getTrialDaysRemaining().then(daysLeft => {
+                this.getTrialDaysRemaining().then(async daysLeft => {
+                    const sub = await this.getSubscriptionStatus();
                     if (daysLeft > 0 && daysLeft <= 7) {
-                        this.showToast({ message: `⚠️ Your free trial expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}.`, type: 'warning' });
+                        const msg = sub.status === 'active'
+                            ? `Your plan renews in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}.`
+                            : `Your free trial expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}.`;
+                        this.showToast({ message: `⚠️ ${msg}`, type: 'warning' });
                     }
-                    // Update subscription status card
-                    this.updateSubscriptionStatusCard(daysLeft);
+                    await this.updateSubscriptionStatusCard(daysLeft);
                 });
             });
             
@@ -1296,7 +1333,7 @@ class HRApp {
                 const supported = !!window.PublicKeyCredential;
                 const enabled = !!user.biometric_enabled;
                 biometricBtn.style.display = supported ? 'block' : 'none';
-                biometricBtn.innerText = enabled ? 'Disable Biometrics' : 'Enable Biometrics';
+                biometricBtn.innerText = enabled ? '🔐 Disable Biometric Login' : '🔐 Enable Biometric Login';
                 biometricBtn.onclick = () => enabled ? this.disableBiometrics() : this.enableBiometrics();
                 biometricStatus.innerText = supported
                     ? (enabled ? 'Biometric sign in enabled on this device.' : 'Optional: enable biometric sign in for faster access.')
@@ -1420,23 +1457,55 @@ class HRApp {
     }
 // --- Payment ---
 
+    loadPaystackScript() {
+        return new Promise((resolve, reject) => {
+            if (typeof PaystackPop !== 'undefined') {
+                resolve();
+                return;
+            }
+            const existing = document.querySelector('script[src*="js.paystack.co"]');
+            if (existing) {
+                if (typeof PaystackPop !== 'undefined') {
+                    resolve();
+                    return;
+                }
+                existing.addEventListener('load', () => resolve());
+                existing.addEventListener('error', () => reject(new Error('Paystack script failed')));
+                return;
+            }
+            const s = document.createElement('script');
+            s.src = 'https://js.paystack.co/v1/inline.js';
+            s.defer = true;
+            s.onload = () => resolve();
+            s.onerror = () => reject(new Error('Paystack script failed'));
+            document.head.appendChild(s);
+        });
+    }
+
     initiatePayment(planName, amount, maxEmployees) {
         if (!this.currentUser) return;
         const manager = this.managers[this.currentUser.username];
         const email = manager?.email || '';
         if (!email) return alert('Manager email not found. Please contact support.');
 
-        const handler = PaystackPop.setup({
-            key: 'pk_test_554291712d47569a3381b5b6b1583e5b74a93b0f',
-            email,
-            amount,
-            currency: 'GHS',
-            ref: `ET-${this.currentUser.company_id}-${Date.now()}`,
-            metadata: { company_id: this.currentUser.company_id, plan: planName, max_employees: maxEmployees },
-            callback: (response) => { this.onPaymentSuccess(response, planName, maxEmployees); },
-            onClose: () => { this.showToast({ message: 'Payment cancelled', type: 'warning' }); }
-        });
-        handler.openIframe();
+        const openPaystack = () => {
+            if (typeof PaystackPop === 'undefined') {
+                return alert('Payment script is still loading. Wait a moment and tap Subscribe again.');
+            }
+            const handler = PaystackPop.setup({
+                key: 'pk_test_554291712d47569a3381b5b6c48cc64d03053dd5',
+                email,
+                amount,
+                currency: 'GHS',
+                ref: `ET-${this.currentUser.company_id}-${Date.now()}`,
+                metadata: { company_id: this.currentUser.company_id, plan: planName, max_employees: maxEmployees },
+                callback: (response) => { this.onPaymentSuccess(response, planName, maxEmployees); },
+                onClose: () => { this.showToast({ message: 'Payment cancelled', type: 'warning' }); }
+            });
+            handler.openIframe();
+        };
+
+        this.loadPaystackScript().then(openPaystack).catch(() => alert('Could not load the payment provider. Check your connection and try again.'));
     }
 
     async onPaymentSuccess(response, planName, maxEmployees) {
@@ -1458,14 +1527,23 @@ class HRApp {
         }
     }
 
+    isSubscriptionPeriodActive(data) {
+        if (!data?.trial_end) return false;
+        const end = new Date(data.trial_end);
+        if (Number.isNaN(end.getTime()) || new Date() >= end) return false;
+        return data.status === 'trial' || data.status === 'active';
+    }
+
     async checkSubscription() {
+        if (!this.currentUser || this.currentUser.role !== 'manager') return true;
         try {
             const { data, error } = await supabase.from('subscriptions').select('*').eq('company_id', this.currentUser.company_id).maybeSingle();
-            if (error || !data) return true;
-            const trialActive = data.status === 'trial' && new Date() < new Date(data.trial_end);
-            const subscriptionActive = data.status === 'active' && new Date() < new Date(data.trial_end);
-            return trialActive || subscriptionActive;
-        } catch { return true; }
+            if (error) return false;
+            if (!data) return false;
+            return this.isSubscriptionPeriodActive(data);
+        } catch {
+            return false;
+        }
     }
 
     async getTrialDaysRemaining() {
@@ -1484,12 +1562,18 @@ class HRApp {
         const daysDisplay = document.getElementById('trial-days-left');
         if (daysDisplay) daysDisplay.innerText = daysLeft;
         const statusDisplay = document.getElementById('trial-status');
-        if (statusDisplay) {
-            if (daysLeft <= 0) {
-                statusDisplay.innerHTML = '<strong style="color: var(--red);">Your trial has expired.</strong> Please upgrade to continue.';
-            } else if (daysLeft <= 7) {
-                statusDisplay.innerHTML = `You have <strong style="color: var(--amber);">${daysLeft}</strong> day${daysLeft !== 1 ? 's' : ''} left in your free trial.`;
-            }
+        if (!statusDisplay) return;
+        const sub = await this.getSubscriptionStatus();
+        if (sub.status === 'active') {
+            statusDisplay.innerHTML = daysLeft <= 0
+                ? '<strong style="color: var(--amber);">Renewal due.</strong> Extend your plan to keep full access.'
+                : `Your <strong>${sub.plan}</strong> plan renews in <strong style="color: var(--green);">${daysLeft}</strong> day${daysLeft !== 1 ? 's' : ''}.`;
+            return;
+        }
+        if (daysLeft <= 0) {
+            statusDisplay.innerHTML = '<strong style="color: var(--red);">Your trial has expired.</strong> Please upgrade to continue.';
+        } else if (daysLeft <= 7) {
+            statusDisplay.innerHTML = `You have <strong style="color: var(--amber);">${daysLeft}</strong> day${daysLeft !== 1 ? 's' : ''} left in your free trial.`;
         }
     }
 
@@ -1497,7 +1581,10 @@ class HRApp {
         try {
             const { data, error } = await supabase.from('subscriptions').select('*').eq('company_id', this.currentUser.company_id).maybeSingle();
             if (error || !data) return { status: 'none', daysLeft: 0, plan: 'free' };
-            const daysLeft = Math.ceil((new Date(data.trial_end) - new Date()) / (1000 * 60 * 60 * 24));
+            if (!data.trial_end) return { status: data.status || 'none', daysLeft: 0, plan: data.plan || 'trial', employees: data.employee_count || 5 };
+            const end = new Date(data.trial_end);
+            if (Number.isNaN(end.getTime())) return { status: data.status || 'none', daysLeft: 0, plan: data.plan || 'trial', employees: data.employee_count || 5 };
+            const daysLeft = Math.ceil((end - new Date()) / (1000 * 60 * 60 * 24));
             return { status: data.status, daysLeft: Math.max(0, daysLeft), plan: data.plan || 'trial', employees: data.employee_count || 5 };
         } catch { return { status: 'none', daysLeft: 0, plan: 'free' }; }
     }
@@ -1506,11 +1593,24 @@ class HRApp {
         const card = document.getElementById('subscription-status-card');
         const badge = document.getElementById('plan-badge');
         const info = document.getElementById('trial-info');
-        
-        if (!card) return;
-        
+
+        if (!card || !badge) return;
+
         card.style.display = 'block';
-        
+
+        const sub = await this.getSubscriptionStatus();
+
+        if (sub.status === 'active') {
+            badge.innerText = '✓ Subscribed';
+            badge.style.color = 'var(--green)';
+            if (info) {
+                info.innerText = daysLeft <= 0
+                    ? `Plan: ${sub.plan}. Renew to keep full access.`
+                    : `Plan: ${sub.plan}. Renews in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}.`;
+            }
+            return;
+        }
+
         if (daysLeft <= 0) {
             badge.innerText = '⏰ Trial Expired';
             badge.style.color = 'var(--red)';

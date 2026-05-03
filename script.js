@@ -766,7 +766,7 @@ class HRApp {
             const credential = await navigator.credentials.create({
                 publicKey: {
                     challenge,
-                    rp: { name: 'Employee Tracker' },
+                    rp: { name: 'WorkWatch' },
                     user: {
                         id: userId,
                         name: this.currentUser.username,
@@ -1497,7 +1497,7 @@ class HRApp {
                 email,
                 amount,
                 currency: 'GHS',
-                ref: `ET-${this.currentUser.company_id}-${Date.now()}`,
+                ref: `WW-${this.currentUser.company_id}-${Date.now()}`,
                 metadata: { company_id: this.currentUser.company_id, plan: planName, max_employees: maxEmployees },
                 callback: (response) => { this.onPaymentSuccess(response, planName, maxEmployees); },
                 onClose: () => { this.showToast({ message: 'Payment cancelled', type: 'warning' }); }

@@ -4,14 +4,22 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#00e87a">
-    <meta name="description" content="Geofenced check-ins, live team visibility, and multi-site management for your workforce.">
-    <title>Employee Tracker</title>
-    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <meta name="description" content="WorkWatch — workforce tracking and management. Geofenced check-ins, live team visibility, and multi-site tools.">
+    <title>WorkWatch</title>
+    <link rel="apple-touch-icon" href="icons/workwatch-logo.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
+    <script>
+        (function () {
+            if (!('serviceWorker' in navigator)) return;
+            navigator.serviceWorker.register('./service-worker.js', { scope: './', updateViaCache: 'none' })
+                .then(function (reg) { console.log('[SW] registered', reg.scope); })
+                .catch(function (err) { console.warn('[SW] register failed', err); });
+        })();
+    </script>
     <script src="https://js.paystack.co/v1/inline.js"></script>
 </head>
 <body>
@@ -20,8 +28,10 @@
 
     <!-- Header -->
     <div class="app-header">
-        <div class="app-logo"><span class="logo-text">ET</span></div>
-        <h1 class="app-title">Employee <span>Tracker</span></h1>
+        <div class="app-logo">
+            <img src="icons/workwatch-logo.png" alt="WorkWatch" width="48" height="48" class="app-logo-img" decoding="async">
+        </div>
+        <h1 class="app-title">Work<span>Watch</span></h1>
     </div>
 
     <div id="toast-container" aria-live="polite"></div>
@@ -497,14 +507,5 @@
 
 <script type="module" src="supabase.js"></script>
 <script type="module" src="script.js"></script>
-<script>
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('service-worker.js')
-                .then(reg => console.log('SW registered!', reg))
-                .catch(err => console.log('SW failed', err));
-        });
-    }
-</script>
 </body>
 </html>

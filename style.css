@@ -91,14 +91,23 @@ body::after {
 .app-logo {
     width: 48px;
     height: 48px;
-    background: var(--green);
+    background: var(--surface-2);
     border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
     position: relative;
-    box-shadow: 0 0 24px var(--green-glow), 0 0 8px var(--green-glow);
+    border: 1px solid var(--border);
+    box-shadow: 0 0 20px rgba(0, 232, 122, 0.12);
+    overflow: hidden;
+}
+
+.app-logo-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
 }
 
 .app-logo::after {
@@ -1120,7 +1129,7 @@ select option { background: var(--surface-2); }
     }
 
     #view-employee::after {
-        content: 'ET';
+        content: 'WW';
         grid-column: 2; grid-row: 1 / -1;
         display: flex;
         align-items: center;

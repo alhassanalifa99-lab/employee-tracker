@@ -1,9 +1,9 @@
 {
     "id": "https://employee-tracker-sooty.vercel.app/",
-    "name": "Employee Tracker",
-    "short_name": "ET App",
-    "description": "Geofenced employee check-ins, live team status, and multi-site management for managers and staff.",
-    "start_url": "./",
+    "name": "WorkWatch",
+    "short_name": "WorkWatch",
+    "description": "WorkWatch — workforce tracking and management. Geofenced check-ins, live team status, and multi-site tools for managers and staff.",
+    "start_url": "./index.html",
     "scope": "./",
     "display": "standalone",
     "display_override": ["standalone", "browser"],
@@ -12,7 +12,8 @@
     "orientation": "any",
     "lang": "en",
     "dir": "ltr",
-    "categories": ["business", "productivity"],
+    "categories": ["business", "productivity", "utilities"],
+    "prefer_related_applications": false,
     "icons": [
         {
             "src": "icons/icon-192.png",
@@ -39,14 +40,14 @@
             "sizes": "1280x720",
             "type": "image/png",
             "form_factor": "wide",
-            "label": "Manager dashboard overview"
+            "label": "Manager dashboard on desktop"
         },
         {
             "src": "icons/screenshot-narrow.png",
             "sizes": "750x1334",
             "type": "image/png",
             "form_factor": "narrow",
-            "label": "Employee check-in on mobile"
+            "label": "WorkWatch check-in on mobile"
         }
     ]
 }

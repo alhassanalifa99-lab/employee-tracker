@@ -21,7 +21,8 @@ class HRApp {
         this.watchId = null;
         this.pendingUser = null;
         this.pendingRegistration = null;
-        this.MAX_DISTANCE_METERS = 50;
+        this.geofenceRadiusMeters = 50;
+        this._lastGeofenceRadiusFetchMs = 0;
         this.geofenceInterval = null;
         this.geofenceLock = false;
         this.managers = {};
@@ -61,6 +62,7 @@ class HRApp {
                             }
                         }
                     }
+                    await this.loadGeofenceRadiusFromSubscription(user.company_id);
                     this.showView(this.currentUser.role === 'manager' ? 'view-manager' : 'view-employee');
                     this.refreshDashboard();
                 } else {
@@ -73,6 +75,56 @@ class HRApp {
         } catch (error) {
             console.error('Error in initAsync:', error);
             alert('Initialization error: ' + error.message);
+        }
+    }
+
+    getEffectiveGeofenceRadius() {
+        const r = Number(this.geofenceRadiusMeters);
+        if (!Number.isFinite(r)) return 50;
+        return Math.min(2000, Math.max(10, r));
+    }
+
+    async loadGeofenceRadiusFromSubscription(companyId) {
+        if (!companyId) {
+            this.geofenceRadiusMeters = 50;
+            return;
+        }
+        try {
+            const { data, error } = await supabase.from('subscriptions').select('geofence_radius_m').eq('company_id', companyId).maybeSingle();
+            if (error) throw error;
+            const v = data?.geofence_radius_m;
+            this.geofenceRadiusMeters = (v != null && Number.isFinite(Number(v)))
+                ? Math.min(2000, Math.max(10, Number(v)))
+                : 50;
+        } catch (e) {
+            console.warn('Could not load geofence_radius_m (add column in Supabase if missing):', e?.message || e);
+            this.geofenceRadiusMeters = 50;
+        }
+    }
+
+    async maybeRefreshGeofenceRadius() {
+        const companyId = this.currentUser?.company_id;
+        if (!companyId) return;
+        const now = Date.now();
+        if (now - this._lastGeofenceRadiusFetchMs < 45000) return;
+        this._lastGeofenceRadiusFetchMs = now;
+        await this.loadGeofenceRadiusFromSubscription(companyId);
+    }
+
+    async saveGeofenceRadius() {
+        if (!this.currentUser || this.currentUser.role !== 'manager') return;
+        const input = document.getElementById('geofence-radius');
+        const raw = parseInt(input?.value, 10);
+        const meters = Number.isFinite(raw) ? Math.min(2000, Math.max(10, raw)) : 50;
+        if (input) input.value = String(meters);
+        try {
+            const { error } = await supabase.from('subscriptions').update({ geofence_radius_m: meters }).eq('company_id', this.currentUser.company_id);
+            if (error) throw error;
+            this.geofenceRadiusMeters = meters;
+            this.showToast({ message: `Check-in radius set to ${meters}m for all worksites.`, type: 'success' });
+        } catch (e) {
+            console.error(e);
+            this.showToast({ message: 'Could not save radius. Ensure the column geofence_radius_m exists on subscriptions, or try again.', type: 'error' });
         }
     }
 
@@ -655,6 +707,8 @@ class HRApp {
             }
 
             try {
+                await this.loadGeofenceRadiusFromSubscription(companyId);
+                this._lastGeofenceRadiusFetchMs = Date.now();
                 await this.getFreshPosition(10000);
             } catch (err) {
                 alert(`GPS Error: ${err.message}\n\nPlease allow GPS access and try again.`);
@@ -665,7 +719,13 @@ class HRApp {
             if (!site) return alert("Error: Assigned Worksite not found. Contact Manager.");
 
             const dist = this.getDistanceFromLatLonInMeters(this.currentPosition.lat, this.currentPosition.lng, site.lat, site.lng);
-            if (dist > this.MAX_DISTANCE_METERS) return alert(`🚫 ACCESS DENIED\n\nYou are ${Math.round(dist)} meters away from ${site.name}.\n\nYou must be within ${this.MAX_DISTANCE_METERS}m to log in.`);
+            const radius = this.getEffectiveGeofenceRadius();
+            if (dist > radius) return alert(`🚫 ACCESS DENIED\n\nYou are ${Math.round(dist)} meters away from ${site.name}.\n\nYou must be within ${radius}m to log in.`);
+        }
+
+        if (user.role === 'manager') {
+            await this.loadGeofenceRadiusFromSubscription(companyId);
+            this._lastGeofenceRadiusFetchMs = Date.now();
         }
 
         this.currentUser = { username, ...user };
@@ -721,6 +781,8 @@ class HRApp {
             });
 
             try {
+                await this.loadGeofenceRadiusFromSubscription(companyId);
+                this._lastGeofenceRadiusFetchMs = Date.now();
                 await this.getFreshPosition(10000);
             } catch (err) {
                 return alert(` GPS Error: ${err.message}\n\nPlease allow GPS access and try again.`);
@@ -728,7 +790,8 @@ class HRApp {
             const site = Object.values(this.sites).find(s => String(s.id) === String(user.assigned_site_id) && s.company_id === user.company_id);
             if (!site) return alert("Error: Assigned Worksite not found. Contact Manager.");
             const dist = this.getDistanceFromLatLonInMeters(this.currentPosition.lat, this.currentPosition.lng, site.lat, site.lng);
-            if (dist > this.MAX_DISTANCE_METERS) return alert(` ACCESS DENIED\n\nYou are ${Math.round(dist)} meters away from ${site.name}.\n\nYou must be within ${this.MAX_DISTANCE_METERS}m to log in.`);
+            const radius = this.getEffectiveGeofenceRadius();
+            if (dist > radius) return alert(` ACCESS DENIED\n\nYou are ${Math.round(dist)} meters away from ${site.name}.\n\nYou must be within ${radius}m to log in.`);
 
             this.currentUser = { username, ...user };
             localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
@@ -899,15 +962,17 @@ class HRApp {
     async monitorGeofence() {
         if (this.geofenceLock) return;
         if (!this.currentUser || this.currentUser.role !== 'employee') return;
+        await this.maybeRefreshGeofenceRadius();
         const user = this.employees[this.currentUser.username];
         if (!user || user.status !== 'checked-in') return;
         const site = Object.values(this.sites).find(s => String(s.id) === String(user.assigned_site_id) && s.company_id === user.company_id);
         if (!site || !this.currentPosition) return;
         const dist = this.getDistanceFromLatLonInMeters(this.currentPosition.lat, this.currentPosition.lng, site.lat, site.lng);
-        if (dist > this.MAX_DISTANCE_METERS) {
+        const radius = this.getEffectiveGeofenceRadius();
+        if (dist > radius) {
             this.geofenceLock = true;
             try {
-                alert(` GEOCONFIG ALERT\n\nYou have left the worksite boundary (${Math.round(dist)}m).\n\nYou have been automatically logged out.`);
+                alert(` GEOCONFIG ALERT\n\nYou have left the worksite boundary (${Math.round(dist)}m from center; limit ${radius}m).\n\nYou have been automatically logged out.`);
                 await this.checkOut("Geofence Exit");
                 this.logout();
             } finally {
@@ -1119,12 +1184,16 @@ class HRApp {
         } catch (err) {
             return alert(` GPS Error: ${err.message}`);
         }
+        if (!this.currentUser?.company_id) return;
+        await this.loadGeofenceRadiusFromSubscription(this.currentUser.company_id);
+        this._lastGeofenceRadiusFetchMs = Date.now();
         const user = this.employees[this.currentUser.username];
         const site = Object.values(this.sites).find(s => String(s.id) === String(user.assigned_site_id) && s.company_id === user.company_id);
         if (!site) return alert("Error: Your assigned worksite was deleted or not found.");
 
         const dist = this.getDistanceFromLatLonInMeters(this.currentPosition.lat, this.currentPosition.lng, site.lat, site.lng);
-            if (dist > this.MAX_DISTANCE_METERS) return alert(`You are ${Math.round(dist)}m away from ${site.name}`);
+        const radius = this.getEffectiveGeofenceRadius();
+        if (dist > radius) return alert(`You are ${Math.round(dist)}m away from ${site.name} (must be within ${radius}m).`);
 
         try {
             const checkInTime = new Date().toISOString();
@@ -1227,6 +1296,11 @@ class HRApp {
                 });
             });
             
+            void this.loadGeofenceRadiusFromSubscription(this.currentUser.company_id).then(() => {
+                const inp = document.getElementById('geofence-radius');
+                if (inp) inp.value = String(this.getEffectiveGeofenceRadius());
+            });
+            
             const company = this.getCompanyData(this.currentUser.company_id);
 
             // 1. Sites dropdown
@@ -1323,8 +1397,21 @@ class HRApp {
             const statusIcon = document.getElementById('emp-status-icon');
             const empBox = document.getElementById('emp-status-box');
             if (statusText && statusIcon && empBox) {
-                if (isCheckedIn) { statusText.innerText = "Checked In"; statusIcon.innerText = ""; empBox.style.background = "rgba(40, 167, 69, 0.2)"; }
-                else { statusText.innerText = "Checked Out"; statusIcon.innerText = ""; empBox.style.background = "rgba(255, 77, 77, 0.1)"; }
+                empBox.classList.remove('checked-in', 'checked-out');
+                if (isCheckedIn) {
+                    statusText.innerText = 'Checked In';
+                    statusIcon.innerText = '✅';
+                    empBox.classList.add('checked-in');
+                } else {
+                    statusText.innerText = 'Checked Out';
+                    statusIcon.innerText = '🛑';
+                    empBox.classList.add('checked-out');
+                }
+            }
+
+            const geoHint = document.getElementById('emp-geofence-hint');
+            if (geoHint) {
+                geoHint.innerText = `Allowed check-in radius: ${this.getEffectiveGeofenceRadius()}m from your assigned worksite center.`;
             }
 
             const biometricBtn = document.getElementById('btn-enable-biometrics');
@@ -1386,7 +1473,7 @@ class HRApp {
             if (!container) return;
 
             const palette = {
-                success: { icon: '', title: 'Success' },
+                success: { icon: '✓', title: 'Success' },
                 error: { icon: '⛔', title: 'Error' },
                 warning: { icon: '⚠️', title: 'Warning' },
                 info: { icon: 'ℹ️', title: 'Info' }
@@ -1452,7 +1539,7 @@ class HRApp {
         const el = document.getElementById(bodyId);
         const icon = document.getElementById(iconId);
         if (!el || !icon) return;
-        if (el.style.display === 'none') { el.style.display = 'block'; icon.textContent = '−'; }
+        if (el.style.display === 'none') { el.style.display = 'block'; icon.textContent = '-'; }
         else { el.style.display = 'none'; icon.textContent = '+'; }
     }
 // --- Payment ---

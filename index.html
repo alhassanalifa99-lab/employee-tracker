@@ -42,7 +42,7 @@
             <p class="auth-hero-title">Track your<br>team <em>in real time.</em></p>
             <p class="auth-hero-sub">Geofenced check-ins. Instant visibility.</p>
             <div class="auth-hero-features">
-                <div class="auth-feature"><span class="auth-feature-dot"></span>50m geofence radius enforcement</div>
+                <div class="auth-feature"><span class="auth-feature-dot"></span>Configurable geofence radius (manager-controlled)</div>
                 <div class="auth-feature"><span class="auth-feature-dot"></span>Real-time check-in dashboard</div>
                 <div class="auth-feature"><span class="auth-feature-dot"></span>Multi-site team management</div>
                 <div class="auth-feature"><span class="auth-feature-dot"></span>Instant activity logs</div>
@@ -410,6 +410,12 @@
                 <div class="card">
                     <h2><span class="h2-icon">📍</span> Manage Sites</h2>
                     <div class="form-group">
+                        <label for="geofence-radius">Check-in radius (meters)</label>
+                        <input type="number" id="geofence-radius" min="10" max="2000" step="5" value="50" inputmode="numeric">
+                        <small style="color:var(--text-muted); display:block; margin-top:6px; font-size:0.75rem;">Applies to all worksites. Employees must be within this distance to sign in and check in.</small>
+                    </div>
+                    <button type="button" class="btn btn-outline" style="width:100%; margin-bottom:16px;" onclick="app.saveGeofenceRadius()">Save radius</button>
+                    <div class="form-group">
                         <label>New Worksite Name</label>
                         <input type="text" id="new-site-name" placeholder="e.g. Headquarters">
                     </div>
@@ -474,6 +480,7 @@
             <div class="form-group" style="margin-bottom:0;">
                 <label>Your Location</label>
                 <div id="emp-coords" class="coordinates-display">Detecting GPS...</div>
+                <p id="emp-geofence-hint" style="font-size:0.78rem; color:var(--text-muted); margin-top:10px;">Allowed check-in radius: —</p>
             </div>
         </div>
 

@@ -30,13 +30,17 @@
     -webkit-tap-highlight-color: transparent;
 }
 
-html, body {
+/* Single vertical scroll root on <html> avoids wheel vs scrollbar mismatch (Chrome/Edge desktop). */
+html {
     overflow-x: hidden;
+    overflow-y: auto;
     overscroll-behavior-y: contain;
-    user-select: none;
 }
 
 body {
+    overflow-x: hidden;
+    overflow-y: visible;
+    overscroll-behavior-y: contain;
     background: var(--black);
     color: var(--text);
     font-family: 'DM Sans', sans-serif;
@@ -78,6 +82,7 @@ body::after {
     padding: 0 0 80px;
     position: relative;
     z-index: 1;
+    user-select: none;
 }
 
 .app-header {
@@ -296,6 +301,7 @@ label {
 }
 
 input, select {
+    user-select: text;
     width: 100%;
     padding: 13px 16px;
     border-radius: var(--radius-sm);
@@ -594,6 +600,7 @@ select option { background: var(--surface-2); }
 .checkout-reason-panel.expanded { max-height: 240px; }
 
 .checkout-reason-panel textarea {
+    user-select: text;
     width: 100%;
     min-height: 90px;
     resize: vertical;
@@ -652,6 +659,58 @@ select option { background: var(--surface-2); }
     font-weight: 600;
     color: var(--text);
     font-size: 0.85rem;
+}
+
+.log-user-group {
+    padding: 10px 0;
+}
+
+.log-user-group + .log-user-group {
+    border-top: 1px solid var(--border);
+    margin-top: 10px;
+}
+
+.log-user-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--text);
+    margin: 0 0 8px;
+}
+
+.log-user-title-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    background: transparent;
+    border: 0;
+    padding: 4px 0 8px;
+    cursor: pointer;
+    color: inherit;
+    text-align: left;
+}
+
+.log-user-title-text {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--text);
+}
+
+.log-user-title-icon {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1.1rem;
+    color: var(--text-muted);
+    line-height: 1;
+}
+
+.logs-table.logs-table-compact th,
+.logs-table.logs-table-compact td {
+    padding-left: 0;
+    padding-right: 0;
 }
 
 .otp-input {
@@ -859,7 +918,7 @@ select option { background: var(--surface-2); }
         min-height: 100vh;
         min-height: 100dvh;
         overflow-x: hidden;
-        overflow-y: auto;
+        overflow-y: visible;
         padding: 0;
     }
 

@@ -90,7 +90,8 @@ class HRApp {
             return;
         }
         try {
-            const { data, error } = await supabase.from('subscriptions').select('geofence_radius_m').eq('company_id', companyId).maybeSingle();
+            // Use select('*') so the app still loads even if the column doesn't exist yet.
+            const { data, error } = await supabase.from('subscriptions').select('*').eq('company_id', companyId).maybeSingle();
             if (error) throw error;
             const v = data?.geofence_radius_m;
             this.geofenceRadiusMeters = (v != null && Number.isFinite(Number(v)))
@@ -118,13 +119,28 @@ class HRApp {
         const meters = Number.isFinite(raw) ? Math.min(2000, Math.max(10, raw)) : 50;
         if (input) input.value = String(meters);
         try {
-            const { error } = await supabase.from('subscriptions').update({ geofence_radius_m: meters }).eq('company_id', this.currentUser.company_id);
+            // Upsert ensures this works even when the company has no subscriptions row yet.
+            const payload = {
+                company_id: this.currentUser.company_id,
+                geofence_radius_m: meters
+            };
+            let { error } = await supabase.from('subscriptions').upsert(payload, { onConflict: 'company_id' });
+            // If the column isn't deployed yet, retry without it (so app doesn't break).
+            if (error && String(error.message || '').toLowerCase().includes('geofence_radius_m')) {
+                ({ error } = await supabase.from('subscriptions').upsert({ company_id: this.currentUser.company_id }, { onConflict: 'company_id' }));
+                if (!error) {
+                    this.geofenceRadiusMeters = meters;
+                    this.showToast({ message: 'Radius could not be saved yet (database column missing). Apply the Supabase migration for geofence_radius_m, then try again.', type: 'warning' });
+                    return;
+                }
+            }
             if (error) throw error;
             this.geofenceRadiusMeters = meters;
             this.showToast({ message: `Check-in radius set to ${meters}m for all worksites.`, type: 'success' });
         } catch (e) {
             console.error(e);
-            this.showToast({ message: 'Could not save radius. Ensure the column geofence_radius_m exists on subscriptions, or try again.', type: 'error' });
+            const msg = e?.message ? `Could not save radius: ${e.message}` : 'Could not save radius. Ensure the column geofence_radius_m exists on subscriptions, or try again.';
+            this.showToast({ message: msg, type: 'error' });
         }
     }
 
@@ -445,9 +461,15 @@ class HRApp {
             trialEndDate.setDate(trialEndDate.getDate() + 30);
             const subscriptionData = {
                 company_id: companyId, status: 'trial',
-                trial_end: trialEndDate.toISOString(), created_at: new Date().toISOString()
+                trial_end: trialEndDate.toISOString(),
+                created_at: new Date().toISOString()
             };
-            const { data, error } = await supabase.from('subscriptions').upsert(subscriptionData, { onConflict: 'company_id' });
+            // Try including geofence radius if column exists; fallback if column missing.
+            const withRadius = { ...subscriptionData, geofence_radius_m: this.getEffectiveGeofenceRadius() };
+            let { data, error } = await supabase.from('subscriptions').upsert(withRadius, { onConflict: 'company_id' });
+            if (error && String(error.message || '').toLowerCase().includes('geofence_radius_m')) {
+                ({ data, error } = await supabase.from('subscriptions').upsert(subscriptionData, { onConflict: 'company_id' }));
+            }
             if (error) throw error;
             return data;
         } catch (error) {
@@ -1345,9 +1367,39 @@ class HRApp {
             // 4. Logs
             const logList = document.getElementById('employee-list');
             if (logList) {
-                logList.innerHTML = company.logs?.length > 0
-                    ? '<table class="logs-table"><tr><th>User</th><th>Action</th><th>Time</th></tr>' + company.logs.slice().reverse().map(log => `<tr><td>${log.username}</td><td>${log.action}</td><td>${log.time}</td></tr>`).join('') + '</table>'
-                    : '<p class="text-muted text-small">No entries yet.</p>';
+                if (!company.logs?.length) {
+                    logList.innerHTML = '<p class="text-muted text-small">No entries yet.</p>';
+                } else {
+                    const ordered = company.logs.slice().reverse(); // oldest → newest
+                    const groups = ordered.reduce((acc, log) => {
+                        const key = log.username || 'Unknown';
+                        if (!acc[key]) acc[key] = [];
+                        acc[key].push(log);
+                        return acc;
+                    }, {});
+
+                    logList.innerHTML = Object.entries(groups).map(([username, logs]) => {
+                        const safeId = String(username).replace(/[^a-zA-Z0-9_-]/g, '_');
+                        const userArg = String(username ?? 'Unknown')
+                            .replace(/\\/g, '\\\\')
+                            .replace(/'/g, "\\'");
+                        const rows = logs.map(l => `<tr><td>${l.action}</td><td>${l.time}</td></tr>`).join('');
+                        return `
+                            <div class="log-user-group">
+                                <button type="button" class="log-user-title-btn" onclick="app.toggleLogUser('${userArg}')">
+                                    <span class="log-user-title-text">${username}</span>
+                                    <span id="log-user-icon-${safeId}" class="log-user-title-icon">+</span>
+                                </button>
+                                <div id="log-user-body-${safeId}" style="display:none;">
+                                    <table class="logs-table logs-table-compact">
+                                        <tr><th>Action</th><th>Time</th></tr>
+                                        ${rows}
+                                    </table>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
             }
 
             // 5. Team list
@@ -1358,16 +1410,18 @@ class HRApp {
                     ? companyEmployees.map(emp => {
                         const siteName = company.sites.find(s => String(s.id) === String(emp.assigned_site_id))?.name || 'Unknown Site';
                         const hasDeviceBinding = !!emp.device_fingerprint;
+                        const esc = String(emp.username ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
                         return `
                         <div class="team-member-item" style="flex-direction:column; align-items:stretch; gap:8px;">
                             <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <div style="cursor:pointer;" onclick="app.toggleEmployeeHistory('${emp.username}')">
+                                <div style="cursor:pointer;" onclick="app.toggleEmployeeHistory('${esc}')">
                                     <div class="team-member-name">${emp.username}</div>
                                     <div class="text-sub">@ ${siteName} — ${hasDeviceBinding ? 'Device bound' : 'No device bound'} — tap to view history</div>
                                 </div>
                                 <div style="display:flex; gap:6px;">
-                                    <button onclick="app.resetEmployeeDeviceBinding('${emp.username}')" class="btn-outline btn-sm">Reset Device</button>
-                                    <button onclick="app.removeEmployee('${emp.username}')" class="btn-danger btn-sm">🗑️</button>
+                                    <button onclick="app.clearEmployeeHistory('${esc}')" class="btn-outline btn-sm">Clear History</button>
+                                    <button onclick="app.resetEmployeeDeviceBinding('${esc}')" class="btn-outline btn-sm">Reset Device</button>
+                                    <button onclick="app.removeEmployee('${esc}')" class="btn-danger btn-sm">🗑️</button>
                                 </div>
                             </div>
                             <div id="history-${emp.username}" style="display:none; background:var(--surface-2); border-radius:var(--radius-sm); padding:12px; font-size:0.82rem; color:var(--text-muted);">
@@ -1542,6 +1596,16 @@ class HRApp {
         if (el.style.display === 'none') { el.style.display = 'block'; icon.textContent = '-'; }
         else { el.style.display = 'none'; icon.textContent = '+'; }
     }
+
+    toggleLogUser(username) {
+        const safeId = String(username || 'Unknown').replace(/[^a-zA-Z0-9_-]/g, '_');
+        const body = document.getElementById(`log-user-body-${safeId}`);
+        const icon = document.getElementById(`log-user-icon-${safeId}`);
+        if (!body || !icon) return;
+        const nextOpen = body.style.display === 'none' || body.style.display === '';
+        body.style.display = nextOpen ? 'block' : 'none';
+        icon.textContent = nextOpen ? '−' : '+';
+    }
 // --- Payment ---
 
     loadPaystackScript() {
@@ -1599,13 +1663,19 @@ class HRApp {
         try {
             const subscriptionEndDate = new Date();
             subscriptionEndDate.setDate(subscriptionEndDate.getDate() + 30);
-            await supabase.from('subscriptions').upsert({
+            const base = {
                 company_id: this.currentUser.company_id,
                 plan: planName, status: 'active',
                 trial_end: subscriptionEndDate.toISOString(),
                 employee_count: maxEmployees,
                 paystack_ref: response.reference
-            }, { onConflict: 'company_id' });
+            };
+            const withRadius = { ...base, geofence_radius_m: this.getEffectiveGeofenceRadius() };
+            let { error } = await supabase.from('subscriptions').upsert(withRadius, { onConflict: 'company_id' });
+            if (error && String(error.message || '').toLowerCase().includes('geofence_radius_m')) {
+                ({ error } = await supabase.from('subscriptions').upsert(base, { onConflict: 'company_id' }));
+            }
+            if (error) throw error;
             this.showToast({ message: `${planName} plan activated! Valid until ${subscriptionEndDate.toLocaleDateString()}`, type: 'success' });
             this.showView('view-manager');
             this.refreshDashboard();
@@ -1731,6 +1801,20 @@ class HRApp {
         } else {
             el.style.display = 'none';
         }
+    }
+
+    clearEmployeeHistory(username) {
+        if (!this.currentUser || this.currentUser.role !== 'manager') return;
+        if (!username) return;
+        if (!confirm(`Clear location history for "${username}"? This removes the on-device tracking history shown in the dashboard.`)) return;
+        const user = this.employees[username];
+        if (user) user.history = [];
+        const el = document.getElementById(`history-${username}`);
+        if (el) {
+            el.style.display = 'none';
+            el.innerHTML = '<p style="color:var(--text-muted);">No location history yet.</p>';
+        }
+        this.showToast({ message: `History cleared for ${username}.`, type: 'success' });
     }
 }
 

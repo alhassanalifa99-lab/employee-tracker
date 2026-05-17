@@ -10,7 +10,7 @@ const alert = (message) => {
 
 // Global Error Handler (Must be first)
 window.onerror = function (msg, url, line, col, error) {
-    alert("⚠️ CRITICAL ERROR:\n" + msg + "\nLine: " + line);
+    alert(" CRITICAL ERROR:\n" + msg + "\nLine: " + line);
     return false;
 };
 
@@ -59,6 +59,8 @@ class HRApp {
                                 await this.createTrialSubscription(user.company_id);
                             } catch (e) {
                                 console.error('Restored session: could not ensure subscription row', e);
+                                console.error('Company ID:', user.company_id);
+                                console.error('Error details:', e?.message, e?.details, e?.hint);
                             }
                         }
                     }
@@ -145,7 +147,7 @@ class HRApp {
     }
 
     async resetDatabase() {
-        if (!confirm('⚠️ WARNING: This will delete ALL data (managers, employees, sites, checkins, subscriptions).\n\nAre you absolutely sure?')) return;
+        if (!confirm(' WARNING: This will delete ALL data (managers, employees, sites, checkins, subscriptions).\n\nAre you absolutely sure?')) return;
         if (!confirm('This action cannot be undone. Continue?')) return;
         if (prompt('Type OK in the box below to confirm database reset:') !== 'OK') return;
         
@@ -457,23 +459,52 @@ class HRApp {
 
     async createTrialSubscription(companyId) {
         try {
+            if (!companyId) {
+                throw new Error('Invalid company_id: cannot create trial subscription without company ID');
+            }
+
             const trialEndDate = new Date();
             trialEndDate.setDate(trialEndDate.getDate() + 30);
-            const subscriptionData = {
-                company_id: companyId, status: 'trial',
-                trial_end: trialEndDate.toISOString(),
-                created_at: new Date().toISOString()
+            const now = new Date().toISOString();
+            const geofenceRadius = this.getEffectiveGeofenceRadius();
+
+            console.log('Creating trial subscription:', { companyId, trialEndDate: trialEndDate.toISOString() });
+
+           const subscriptionData = {
+  company_id: companyId,
+  subscription_plan: 'trial',      // ← match your actual column names
+  subscription_status: 'active',   // ← match your actual column names
+  trial_end: trialEndDate.toISOString(),
+  created_at: now,
+  updated_at: now
+};
+
+            const subscriptionDataWithGeofence = {
+                ...subscriptionData,
+                geofence_radius_m: geofenceRadius
             };
-            // Try including geofence radius if column exists; fallback if column missing.
-            const withRadius = { ...subscriptionData, geofence_radius_m: this.getEffectiveGeofenceRadius() };
-            let { data, error } = await supabase.from('subscriptions').upsert(withRadius, { onConflict: 'company_id' });
+
+            console.log('Attempting upsert with geofence_radius_m:', subscriptionDataWithGeofence);
+
+            let { data, error } = await supabase.from('subscriptions').upsert(subscriptionDataWithGeofence, { onConflict: 'company_id' });
+            
+            // If geofence column doesn't exist yet, retry without it
             if (error && String(error.message || '').toLowerCase().includes('geofence_radius_m')) {
+                console.warn('geofence_radius_m column not found, retrying without it...');
+                console.log('Retrying upsert without geofence_radius_m:', subscriptionData);
                 ({ data, error } = await supabase.from('subscriptions').upsert(subscriptionData, { onConflict: 'company_id' }));
             }
-            if (error) throw error;
+            
+            if (error) {
+                console.error('Supabase upsert error:', error);
+                throw error;
+            }
+
+            console.log('Trial subscription created successfully:', data);
             return data;
         } catch (error) {
             console.error('Error creating trial subscription:', error);
+            console.error('Full error object:', JSON.stringify(error, null, 2));
             throw error;
         }
     }
@@ -634,7 +665,14 @@ class HRApp {
             if (this.pendingRegistration.type === 'manager') {
                 this.pendingRegistration.managerData.verified = true;
                 await this.saveManager(this.pendingRegistration.username, this.pendingRegistration.managerData);
-                await this.createTrialSubscription(this.pendingRegistration.company_id);
+                try {
+                    await this.createTrialSubscription(this.pendingRegistration.company_id);
+                } catch (e) {
+                    console.error('Trial subscription creation failed during registration:', e);
+                    console.error('Company ID:', this.pendingRegistration.company_id);
+                    console.error('Error details:', e?.message, e?.details, e?.hint);
+                    this.showToast({ message: 'Warning: Trial subscription setup encountered an issue, but your account was created. You can still subscribe to a paid plan.', type: 'warning' });
+                }
 
                 alert(" Email Verified Successfully!");
                 alert(` Company "${this.pendingRegistration.company_name}" Created!\n\nCompany ID: ${this.pendingRegistration.company_id}\n\nSelect your plan to get started...`);
@@ -712,6 +750,8 @@ class HRApp {
                     await this.createTrialSubscription(companyId);
                 } catch (e) {
                     console.error('Subscription setup failed:', e);
+                    console.error('Company ID:', companyId);
+                    console.error('Error details:', e?.message, e?.details, e?.hint);
                     return alert('Could not start billing trial for this workspace. Please try again or contact support.');
                 }
             }
@@ -950,7 +990,10 @@ class HRApp {
                 console.error("GPS Watch Error:", error);
                 if (error.code === 3 || error.code === 2) {
                     if (statusEl) { statusEl.className = 'gps-pill waiting'; statusEl.innerHTML = `<span class="gps-dot"></span><span>Switching to network location...</span>`; }
-                    navigator.geolocation.clearWatch(this.watchId);
+                    if (this.watchId) {
+                        navigator.geolocation.clearWatch(this.watchId);
+                        this.watchId = null;
+                    }
                     this.watchId = navigator.geolocation.watchPosition(
                         (pos) => { this.currentPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude }; this.updateUIWithLocation(); if (this.currentUser && this.currentUser.role === 'employee') this.monitorGeofence(); },
                         (err) => {
@@ -994,7 +1037,7 @@ class HRApp {
         if (dist > radius) {
             this.geofenceLock = true;
             try {
-                alert(` GEOCONFIG ALERT\n\nYou have left the worksite boundary (${Math.round(dist)}m from center; limit ${radius}m).\n\nYou have been automatically logged out.`);
+                alert(` GEOFENCE ALERT\n\nYou have left the worksite boundary (${Math.round(dist)}m from center; limit ${radius}m).\n\nYou have been automatically logged out.`);
                 await this.checkOut("Geofence Exit");
                 this.logout();
             } finally {
@@ -1162,6 +1205,9 @@ class HRApp {
                 return;
             }
 
+            if (!this.companies[this.currentUser.company_id]) {
+                this.companies[this.currentUser.company_id] = { sites: [], employees: [], logs: [] };
+            }
             if (!this.companies[this.currentUser.company_id].employees.includes(username)) this.companies[this.currentUser.company_id].employees.push(username);
             alert(`Employee ${username} linked successfully!`);
             this.refreshDashboard();
@@ -1174,8 +1220,10 @@ class HRApp {
         if (!confirm(`Are you sure you want to remove ${username}?\nThey will be permanently deleted.`)) return;
         try {
             await this.deleteEmployee(username);
-            const idx = this.companies[this.currentUser.company_id].employees.indexOf(username);
-            if (idx > -1) this.companies[this.currentUser.company_id].employees.splice(idx, 1);
+            if (this.companies[this.currentUser.company_id]) {
+                const idx = this.companies[this.currentUser.company_id].employees.indexOf(username);
+                if (idx > -1) this.companies[this.currentUser.company_id].employees.splice(idx, 1);
+            }
             this.refreshDashboard();
             alert("Employee removed.");
         } catch (error) { alert('Failed to remove employee: ' + error.message); }
@@ -1210,6 +1258,7 @@ class HRApp {
         await this.loadGeofenceRadiusFromSubscription(this.currentUser.company_id);
         this._lastGeofenceRadiusFetchMs = Date.now();
         const user = this.employees[this.currentUser.username];
+        if (!user) return alert("Error: Your employee profile not found.");
         const site = Object.values(this.sites).find(s => String(s.id) === String(user.assigned_site_id) && s.company_id === user.company_id);
         if (!site) return alert("Error: Your assigned worksite was deleted or not found.");
 
@@ -1494,7 +1543,7 @@ class HRApp {
             if (startTime instanceof Date) return startTime.getTime();
             if (typeof startTime === 'string') {
                 const parsed = Date.parse(startTime);
-                return Number.isFinite(parsed) ? parsed : null;
+                return !isNaN(parsed) ? parsed : null;
             }
             return null;
         })();
@@ -1665,7 +1714,7 @@ class HRApp {
             subscriptionEndDate.setDate(subscriptionEndDate.getDate() + 30);
             const base = {
                 company_id: this.currentUser.company_id,
-                plan: planName, status: 'active',
+                subscription_plan: planName, subscription_status: 'active',
                 trial_end: subscriptionEndDate.toISOString(),
                 employee_count: maxEmployees,
                 paystack_ref: response.reference
@@ -1688,11 +1737,11 @@ class HRApp {
         if (!data?.trial_end) return false;
         const end = new Date(data.trial_end);
         if (Number.isNaN(end.getTime()) || new Date() >= end) return false;
-        return data.status === 'trial' || data.status === 'active';
+       return data.subscription_status === 'trial' || data.subscription_status === 'active';
     }
 
     async checkSubscription() {
-        if (!this.currentUser || this.currentUser.role !== 'manager') return true;
+        if (!this.currentUser || this.currentUser.role !== 'manager') return false;
         try {
             const { data, error } = await supabase.from('subscriptions').select('*').eq('company_id', this.currentUser.company_id).maybeSingle();
             if (error) return false;
@@ -1714,38 +1763,39 @@ class HRApp {
         } catch { return 0; }
     }
 
-    async updateTrialStatus() {
-        const daysLeft = await this.getTrialDaysRemaining();
-        const daysDisplay = document.getElementById('trial-days-left');
-        if (daysDisplay) daysDisplay.innerText = daysLeft;
-        const statusDisplay = document.getElementById('trial-status');
-        if (!statusDisplay) return;
-        const sub = await this.getSubscriptionStatus();
-        if (sub.status === 'active') {
-            statusDisplay.innerHTML = daysLeft <= 0
-                ? '<strong style="color: var(--amber);">Renewal due.</strong> Extend your plan to keep full access.'
-                : `Your <strong>${sub.plan}</strong> plan renews in <strong style="color: var(--green);">${daysLeft}</strong> day${daysLeft !== 1 ? 's' : ''}.`;
-            return;
-        }
-        if (daysLeft <= 0) {
-            statusDisplay.innerHTML = '<strong style="color: var(--red);">Your trial has expired.</strong> Please upgrade to continue.';
-        } else if (daysLeft <= 7) {
-            statusDisplay.innerHTML = `You have <strong style="color: var(--amber);">${daysLeft}</strong> day${daysLeft !== 1 ? 's' : ''} left in your free trial.`;
-        }
-    }
+isSubscriptionPeriodActive(data) {
+    if (!data?.trial_end) return false;
+    const end = new Date(data.trial_end);
+    if (Number.isNaN(end.getTime()) || new Date() >= end) return false;
+    return data.subscription_status === 'trial' || data.subscription_status === 'active';
+}
 
-    async getSubscriptionStatus() {
-        try {
-            const { data, error } = await supabase.from('subscriptions').select('*').eq('company_id', this.currentUser.company_id).maybeSingle();
-            if (error || !data) return { status: 'none', daysLeft: 0, plan: 'free' };
-            if (!data.trial_end) return { status: data.status || 'none', daysLeft: 0, plan: data.plan || 'trial', employees: data.employee_count || 5 };
-            const end = new Date(data.trial_end);
-            if (Number.isNaN(end.getTime())) return { status: data.status || 'none', daysLeft: 0, plan: data.plan || 'trial', employees: data.employee_count || 5 };
-            const daysLeft = Math.ceil((end - new Date()) / (1000 * 60 * 60 * 24));
-            return { status: data.status, daysLeft: Math.max(0, daysLeft), plan: data.plan || 'trial', employees: data.employee_count || 5 };
-        } catch { return { status: 'none', daysLeft: 0, plan: 'free' }; }
-    }
-
+async getSubscriptionStatus() {
+    try {
+        const { data, error } = await supabase.from('subscriptions').select('*').eq('company_id', this.currentUser.company_id).maybeSingle();
+        if (error || !data) return { status: 'none', daysLeft: 0, plan: 'free' };
+        if (!data.trial_end) return { 
+            status: data.subscription_status || 'none', 
+            daysLeft: 0, 
+            plan: data.subscription_plan || 'trial', 
+            employees: data.employee_count || 5 
+        };
+        const end = new Date(data.trial_end);
+        if (Number.isNaN(end.getTime())) return { 
+            status: data.subscription_status || 'none', 
+            daysLeft: 0, 
+            plan: data.subscription_plan || 'trial', 
+            employees: data.employee_count || 5 
+        };
+        const daysLeft = Math.ceil((end - new Date()) / (1000 * 60 * 60 * 24));
+        return { 
+            status: data.subscription_status, 
+            daysLeft: Math.max(0, daysLeft), 
+            plan: data.subscription_plan || 'trial', 
+            employees: data.employee_count || 5 
+        };
+    } catch { return { status: 'none', daysLeft: 0, plan: 'free' }; }
+}
     async updateSubscriptionStatusCard(daysLeft) {
         const card = document.getElementById('subscription-status-card');
         const badge = document.getElementById('plan-badge');

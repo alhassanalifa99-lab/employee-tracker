@@ -8,7 +8,6 @@ const alert = (message) => {
     console.warn('Alert suppressed before app init:', message);
 };
 
-// Global Error Handler (Must be first)
 window.onerror = function (msg, url, line, col, error) {
     alert(" CRITICAL ERROR:\n" + msg + "\nLine: " + line);
     return false;
@@ -40,6 +39,8 @@ class HRApp {
         }
     }
 
+    // ─── INIT ────────────────────────────────────────────────────────────────
+
     async initAsync() {
         try {
             this.watchLocation();
@@ -59,8 +60,6 @@ class HRApp {
                                 await this.createTrialSubscription(user.company_id);
                             } catch (e) {
                                 console.error('Restored session: could not ensure subscription row', e);
-                                console.error('Company ID:', user.company_id);
-                                console.error('Error details:', e?.message, e?.details, e?.hint);
                             }
                         }
                     }
@@ -80,6 +79,8 @@ class HRApp {
         }
     }
 
+    // ─── GEOFENCE RADIUS ─────────────────────────────────────────────────────
+
     getEffectiveGeofenceRadius() {
         const r = Number(this.geofenceRadiusMeters);
         if (!Number.isFinite(r)) return 50;
@@ -87,20 +88,15 @@ class HRApp {
     }
 
     async loadGeofenceRadiusFromSubscription(companyId) {
-        if (!companyId) {
-            this.geofenceRadiusMeters = 50;
-            return;
-        }
+        if (!companyId) { this.geofenceRadiusMeters = 50; return; }
         try {
-            // Use select('*') so the app still loads even if the column doesn't exist yet.
             const { data, error } = await supabase.from('subscriptions').select('*').eq('company_id', companyId).maybeSingle();
             if (error) throw error;
             const v = data?.geofence_radius_m;
             this.geofenceRadiusMeters = (v != null && Number.isFinite(Number(v)))
-                ? Math.min(2000, Math.max(10, Number(v)))
-                : 50;
+                ? Math.min(2000, Math.max(10, Number(v))) : 50;
         } catch (e) {
-            console.warn('Could not load geofence_radius_m (add column in Supabase if missing):', e?.message || e);
+            console.warn('Could not load geofence_radius_m:', e?.message || e);
             this.geofenceRadiusMeters = 50;
         }
     }
@@ -121,18 +117,13 @@ class HRApp {
         const meters = Number.isFinite(raw) ? Math.min(2000, Math.max(10, raw)) : 50;
         if (input) input.value = String(meters);
         try {
-            // Upsert ensures this works even when the company has no subscriptions row yet.
-            const payload = {
-                company_id: this.currentUser.company_id,
-                geofence_radius_m: meters
-            };
+            const payload = { company_id: this.currentUser.company_id, geofence_radius_m: meters };
             let { error } = await supabase.from('subscriptions').upsert(payload, { onConflict: 'company_id' });
-            // If the column isn't deployed yet, retry without it (so app doesn't break).
             if (error && String(error.message || '').toLowerCase().includes('geofence_radius_m')) {
                 ({ error } = await supabase.from('subscriptions').upsert({ company_id: this.currentUser.company_id }, { onConflict: 'company_id' }));
                 if (!error) {
                     this.geofenceRadiusMeters = meters;
-                    this.showToast({ message: 'Radius could not be saved yet (database column missing). Apply the Supabase migration for geofence_radius_m, then try again.', type: 'warning' });
+                    this.showToast({ message: 'Radius could not be saved yet (database column missing).', type: 'warning' });
                     return;
                 }
             }
@@ -141,30 +132,24 @@ class HRApp {
             this.showToast({ message: `Check-in radius set to ${meters}m for all worksites.`, type: 'success' });
         } catch (e) {
             console.error(e);
-            const msg = e?.message ? `Could not save radius: ${e.message}` : 'Could not save radius. Ensure the column geofence_radius_m exists on subscriptions, or try again.';
-            this.showToast({ message: msg, type: 'error' });
+            this.showToast({ message: e?.message ? `Could not save radius: ${e.message}` : 'Could not save radius.', type: 'error' });
         }
     }
 
+    // ─── DATABASE ────────────────────────────────────────────────────────────
+
     async resetDatabase() {
-        if (!confirm(' WARNING: This will delete ALL data (managers, employees, sites, checkins, subscriptions).\n\nAre you absolutely sure?')) return;
+        if (!confirm(' WARNING: This will delete ALL data.\n\nAre you absolutely sure?')) return;
         if (!confirm('This action cannot be undone. Continue?')) return;
-        if (prompt('Type OK in the box below to confirm database reset:') !== 'OK') return;
-        
+        if (prompt('Type OK to confirm:') !== 'OK') return;
         try {
             this.showToast({ message: 'Resetting database...', type: 'info' });
-            await supabase.from('checkins').delete().neq('id', 'x'); // Delete all
-            await supabase.from('subscriptions').delete().neq('company_id', 'x'); // Delete all
-            await supabase.from('sites').delete().neq('id', 'x'); // Delete all
-            await supabase.from('employees').delete().neq('username', 'x'); // Delete all
-            await supabase.from('managers').delete().neq('username', 'x'); // Delete all
-            
-            this.managers = {};
-            this.employees = {};
-            this.sites = {};
-            this.logs = {};
-            this.subscriptions = {};
-            
+            await supabase.from('checkins').delete().neq('id', 'x');
+            await supabase.from('subscriptions').delete().neq('company_id', 'x');
+            await supabase.from('sites').delete().neq('id', 'x');
+            await supabase.from('employees').delete().neq('username', 'x');
+            await supabase.from('managers').delete().neq('username', 'x');
+            this.managers = {}; this.employees = {}; this.sites = {}; this.logs = {}; this.subscriptions = {};
             this.showToast({ message: '✅ Database reset complete!', type: 'success' });
             this.logout();
         } catch (error) {
@@ -173,209 +158,13 @@ class HRApp {
         }
     }
 
-    selectPlanAndContinue(maxEmployees, planName) {
-        if (!this.currentUser) return alert('Session expired. Please login.');
-        this.showToast({ message: `✓ ${planName} plan selected!`, type: 'success' });
-        this.showView('view-manager');
-        this.refreshDashboard();
-    }
-
-    setupRealtimeSubscriptions() {
-        try {
-            if (!this.currentUser?.company_id) return;
-            const companyId = this.currentUser.company_id;
-
-            const employeesChannel = supabase.channel('employees_changes')
-                .on('postgres_changes', {
-                    event: '*', schema: 'public', table: 'employees',
-                    filter: `company_id=eq.${companyId}`
-                }, (payload) => {
-                    const newData = payload.new;
-                    if (newData?.username) {
-                        this.employees[newData.username] = newData;
-                        if (this.currentUser?.username === newData.username) {
-                            this.currentUser = { ...this.currentUser, ...newData };
-                            localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
-                        }
-                        if (this.currentUser?.role === 'manager') this.refreshDashboard();
-                    }
-                }).subscribe();
-            this.subscriptions.employees = employeesChannel;
-
-            const checkinsChannel = supabase.channel('checkins_changes')
-                .on('postgres_changes', {
-                    event: 'INSERT', schema: 'public', table: 'checkins',
-                    filter: `company_id=eq.${companyId}`
-                }, (payload) => {
-                    const newCheckin = payload.new;
-                    if (newCheckin?.company_id) {
-                        if (!this.logs[newCheckin.company_id]) this.logs[newCheckin.company_id] = [];
-                        this.logs[newCheckin.company_id].unshift(newCheckin);
-                        if (this.currentUser?.role === 'manager') this.refreshDashboard();
-                    }
-                }).subscribe();
-            this.subscriptions.checkins = checkinsChannel;
-        } catch (error) {
-            console.error('Error setting up real-time subscriptions:', error);
-        }
-    }
-
-    setupAuthStateListener() {
-        supabase.auth.onAuthStateChange(async (event, session) => {
-            console.log('Auth state changed:', event, session);
-            if (event === 'SIGNED_IN' && session && session.user) {
-                if (!this._otpJustVerified) {
-                    console.log('Ignoring auto SIGNED_IN on page load');
-                    return;
-                }
-                this._otpJustVerified = false;
-            }
-        });
-    }
-
-    clearPendingRegistration() {
-        this.pendingRegistration = null;
-        this.pendingUser = null;
-        localStorage.removeItem('hrapp_pending_registration');
-    }
-
-    async hashString(input) {
-        const encoded = new TextEncoder().encode(input);
-        const digest = await crypto.subtle.digest('SHA-256', encoded);
-        return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
-    }
-
-    async generateDeviceFingerprint() {
-        const nav = window.navigator;
-        const screenInfo = window.screen || {};
-        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown';
-        const fingerprintPayload = {
-            userAgent: nav.userAgent || '',
-            platform: nav.platform || '',
-            language: nav.language || '',
-            languages: (nav.languages || []).join(','),
-            hardwareConcurrency: nav.hardwareConcurrency || 0,
-            deviceMemory: nav.deviceMemory || 0,
-            maxTouchPoints: nav.maxTouchPoints || 0,
-            screen: `${screenInfo.width || 0}x${screenInfo.height || 0}x${screenInfo.colorDepth || 0}`,
-            timezone: tz
-        };
-        return this.hashString(JSON.stringify(fingerprintPayload));
-    }
-
-    getBiometricMap() {
-        try {
-            const raw = localStorage.getItem(this.BIOMETRIC_STORAGE_KEY);
-            return raw ? JSON.parse(raw) : {};
-        } catch (error) {
-            console.warn('Failed to read biometric storage:', error);
-            return {};
-        }
-    }
-
-    setBiometricMap(nextMap) {
-        localStorage.setItem(this.BIOMETRIC_STORAGE_KEY, JSON.stringify(nextMap));
-    }
-
-    getBiometricKey(username, companyId, fingerprint) {
-        return `${username}::${companyId || 'nocompany'}::${fingerprint || 'nofp'}`;
-    }
-
-    arrayBufferToBase64(buffer) {
-        const bytes = new Uint8Array(buffer);
-        let binary = '';
-        bytes.forEach(byte => { binary += String.fromCharCode(byte); });
-        return btoa(binary);
-    }
-
-    base64ToArrayBuffer(base64) {
-        const binary = atob(base64);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-        return bytes.buffer;
-    }
-
-    async updateBiometricLoginButton() {
-        const biometricBtn = document.getElementById('auth-biometric-btn');
-        if (!biometricBtn) return;
-
-        const username = document.getElementById('auth-username')?.value?.trim()?.toLowerCase();
-        const companyId = document.getElementById('auth-company')?.value?.trim()?.toUpperCase();
-        if (!username) {
-            biometricBtn.style.display = 'none';
-            return;
-        }
-
-        const user = this.managers[username] || this.employees[username];
-        if (!user || user.role !== 'employee' || !user.company_id || (companyId && user.company_id !== companyId)) {
-            biometricBtn.style.display = 'none';
-            return;
-        }
-
-        if (!window.PublicKeyCredential) {
-            biometricBtn.style.display = 'none';
-            return;
-        }
-
-        const fingerprint = await this.generateDeviceFingerprint();
-        const biometricMap = this.getBiometricMap();
-        const key = this.getBiometricKey(username, user.company_id, fingerprint);
-        biometricBtn.style.display = biometricMap[key]?.credentialId ? 'block' : 'none';
-    }
-
-    setupAuthInputListeners() {
-        const usernameField = document.getElementById('auth-username');
-        const companyField = document.getElementById('auth-company');
-        if (usernameField) usernameField.addEventListener('input', () => { this.updateBiometricLoginButton(); });
-        if (companyField) companyField.addEventListener('input', () => { this.updateBiometricLoginButton(); });
-    }
-
-    async getFreshPosition(timeout = 10000) {
-        return new Promise((resolve, reject) => {
-            if (!navigator.geolocation) {
-                reject(new Error('Geolocation is not supported by your browser.'));
-                return;
-            }
-            navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                    const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-                    this.currentPosition = coords;
-                    this.updateUIWithLocation();
-                    resolve(coords);
-                },
-                (err) => reject(new Error(err.message || 'Unable to get location')),
-                { enableHighAccuracy: true, timeout, maximumAge: 0 }
-            );
-        });
-    }
-
-    startGeofenceWatchdog() {
-        if (this.geofenceInterval) clearInterval(this.geofenceInterval);
-        this.geofenceInterval = setInterval(async () => {
-            if (!this.currentUser || this.currentUser.role !== 'employee') return;
-            try {
-                await this.getFreshPosition(8000);
-            } catch (err) {
-                console.warn('Geofence watchdog GPS refresh failed:', err?.message || err);
-            }
-            await this.monitorGeofence();
-        }, 15000);
-    }
-
-    stopGeofenceWatchdog() {
-        if (this.geofenceInterval) {
-            clearInterval(this.geofenceInterval);
-            this.geofenceInterval = null;
-        }
-    }
-
     async loadAllData() {
         try {
-               // Refresh session if expired
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.expires_at && session.expires_at * 1000 < Date.now()) {
-            await supabase.auth.refreshSession();
-        }
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.expires_at && session.expires_at * 1000 < Date.now()) {
+                await supabase.auth.refreshSession();
+            }
+
             const { data: managersData, error: managersError } = await supabase.from('managers').select('*');
             if (managersError) throw managersError;
             managersData?.forEach(m => {
@@ -418,7 +207,7 @@ class HRApp {
                     this.employees = data.employees || {};
                     this.sites = data.sites || {};
                     this.logs = data.logs || {};
-                    this.showToast('Using offline cache - some data may be outdated', 'warning');
+                    this.showToast({ message: 'Using offline cache - some data may be outdated', type: 'warning' });
                     return;
                 }
             } catch (storageError) {
@@ -445,6 +234,8 @@ class HRApp {
         return company;
     }
 
+    // ─── SAVE / DELETE ───────────────────────────────────────────────────────
+
     async saveManager(username, managerData) {
         try {
             const insertData = { username, ...managerData, updated_at: new Date().toISOString() };
@@ -453,58 +244,6 @@ class HRApp {
             this.managers[username] = { username, ...managerData };
         } catch (error) {
             console.error('Error saving manager:', error);
-            throw error;
-        }
-    }
-
-    async createTrialSubscription(companyId) {
-        try {
-            if (!companyId) {
-                throw new Error('Invalid company_id: cannot create trial subscription without company ID');
-            }
-
-            const trialEndDate = new Date();
-            trialEndDate.setDate(trialEndDate.getDate() + 30);
-            const now = new Date().toISOString();
-            const geofenceRadius = this.getEffectiveGeofenceRadius();
-
-            console.log('Creating trial subscription:', { companyId, trialEndDate: trialEndDate.toISOString() });
-
-           const subscriptionData = {
-  company_id: companyId,
-  subscription_plan: 'trial',      // ← match your actual column names
-  subscription_status: 'active',   // ← match your actual column names
-  trial_end: trialEndDate.toISOString(),
-  created_at: now,
-  updated_at: now
-};
-
-            const subscriptionDataWithGeofence = {
-                ...subscriptionData,
-                geofence_radius_m: geofenceRadius
-            };
-
-            console.log('Attempting upsert with geofence_radius_m:', subscriptionDataWithGeofence);
-
-            let { data, error } = await supabase.from('subscriptions').upsert(subscriptionDataWithGeofence, { onConflict: 'company_id' });
-            
-            // If geofence column doesn't exist yet, retry without it
-            if (error && String(error.message || '').toLowerCase().includes('geofence_radius_m')) {
-                console.warn('geofence_radius_m column not found, retrying without it...');
-                console.log('Retrying upsert without geofence_radius_m:', subscriptionData);
-                ({ data, error } = await supabase.from('subscriptions').upsert(subscriptionData, { onConflict: 'company_id' }));
-            }
-            
-            if (error) {
-                console.error('Supabase upsert error:', error);
-                throw error;
-            }
-
-            console.log('Trial subscription created successfully:', data);
-            return data;
-        } catch (error) {
-            console.error('Error creating trial subscription:', error);
-            console.error('Full error object:', JSON.stringify(error, null, 2));
             throw error;
         }
     }
@@ -568,352 +307,386 @@ class HRApp {
         }
     }
 
-    setupLocationWatcher() { this.watchLocation(); }
+    // ─── SUBSCRIPTION ────────────────────────────────────────────────────────
 
-    // --- Authentication ---
-
-    async registerNewCompany() {
-        const companyName = document.getElementById('reg-company-name').value.trim();
-        const managerName = document.getElementById('reg-manager-name').value.trim().toLowerCase();
-        const managerEmail = document.getElementById('reg-manager-email').value.trim();
-        const managerPassword = document.getElementById('reg-manager-password').value.trim();
-        const companyIdInput = document.getElementById('reg-company-id').value.trim().toUpperCase();
-
-        if (!companyName || !managerName || !managerEmail) return alert("Please fill all fields");
-        if (!managerPassword) return alert("Please create a password for your account.");
-
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(managerEmail)) return alert("Please enter a valid email address");
-        if (this.managers[managerName]) return alert("Username already taken!");
-
+    async createTrialSubscription(companyId) {
         try {
-            const { data: existingEmails, error: queryError } = await supabase.from('managers').select('email').eq('email', managerEmail).limit(1);
-            if (queryError) return alert("Error checking email: " + queryError.message);
-            if (existingEmails && existingEmails.length > 0) return alert("This email is already registered.");
-        } catch (error) {
-            return alert("Error validating email: " + error.message);
-        }
+            if (!companyId) throw new Error('Invalid company_id');
 
-        try {
-            const companyId = companyIdInput || (companyName.substring(0, 4) + Math.floor(1000 + Math.random() * 9000)).toUpperCase();
-            const { data, error } = await supabase.auth.signInWithOtp({
-                email: managerEmail,
-                options: { shouldCreateUser: true, emailRedirectTo: null }
-            });
-            if (error) throw error;
+            const trialEndDate = new Date();
+            trialEndDate.setDate(trialEndDate.getDate() + 30);
+            const now = new Date().toISOString();
+            const geofenceRadius = this.getEffectiveGeofenceRadius();
 
-            this.pendingRegistration = {
-                email: managerEmail, username: managerName, type: 'manager',
-                company_id: companyId, company_name: companyName,
-                managerData: { company_id: companyId, password: managerPassword, role: 'manager', name: managerName, email: managerEmail, verified: false }
+            console.log('Creating trial subscription:', { companyId, trialEndDate: trialEndDate.toISOString() });
+
+            const subscriptionData = {
+                company_id: companyId,
+                subscription_plan: 'trial',
+                subscription_status: 'active',
+                trial_end: trialEndDate.toISOString(),
+                employee_count: 10,
+                paystack_ref: '',
+                created_at: now,
+                updated_at: now
             };
-            localStorage.setItem('hrapp_pending_registration', JSON.stringify(this.pendingRegistration));
-            this.showToast(`✉️ 6-digit OTP sent to ${managerEmail}. Check your inbox!`, 'success');
-            this.showView('view-verify');
-        } catch (error) {
-            alert('Failed to send verification code: ' + error.message);
-        }
-    }
 
-    async registerNewEmployeeUser() {
-        const username = document.getElementById('reg-emp-username-self').value.trim().toLowerCase();
-        const email = document.getElementById('reg-emp-email-self').value.trim();
-        const phone = document.getElementById('reg-emp-phone-self').value.trim();
-        const passcode = document.getElementById('reg-emp-passcode-self').value.trim();
+            const withGeofence = { ...subscriptionData, geofence_radius_m: geofenceRadius };
 
-        if (!username) return alert("Please enter a username.");
-        if (!email) return alert("Email is required for verification.");
+            let { data, error } = await supabase.from('subscriptions').upsert(withGeofence, { onConflict: 'company_id' });
 
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) return alert("Please enter a valid email address.");
-        if (this.employees[username] || this.managers[username]) return alert("Username already taken!");
-
-        try {
-            const { data, error } = await supabase.auth.signInWithOtp({
-                email: email,
-                options: { shouldCreateUser: true, emailRedirectTo: null }
-            });
-            if (error) throw error;
-
-            this.pendingRegistration = {
-                email, username, type: 'employee',
-                employeeData: { email, phone: phone || null, passcode: passcode || null, company_id: null, assigned_site_id: null, status: 'checked-out', verified: false }
-            };
-            localStorage.setItem('hrapp_pending_registration', JSON.stringify(this.pendingRegistration));
-            this.showToast(`✉️ 6-digit OTP sent to ${email}. Check your inbox!`, 'success');
-            this.showView('view-verify');
-        } catch (error) {
-            alert('Failed to send verification code: ' + error.message);
-        }
-    }
-
-    async verifyAccount() {
-        const codeInput = document.getElementById('verify-code').value.trim();
-        if (!this.pendingRegistration) return this.showView('view-auth');
-        if (!codeInput) return alert("Please enter the verification code");
-
-        try {
-            console.log('Verifying OTP for:', this.pendingRegistration.email);
-            this._otpJustVerified = true;
-            const { data, error } = await supabase.auth.verifyOtp({
-                email: this.pendingRegistration.email,
-                token: codeInput,
-                type: 'email'
-            });
-            if (error) throw error;
-
-            if (this.pendingRegistration.type === 'manager') {
-                this.pendingRegistration.managerData.verified = true;
-                await this.saveManager(this.pendingRegistration.username, this.pendingRegistration.managerData);
-                try {
-                    await this.createTrialSubscription(this.pendingRegistration.company_id);
-                } catch (e) {
-                    console.error('Trial subscription creation failed during registration:', e);
-                    console.error('Company ID:', this.pendingRegistration.company_id);
-                    console.error('Error details:', e?.message, e?.details, e?.hint);
-                    this.showToast({ message: 'Warning: Trial subscription setup encountered an issue, but your account was created. You can still subscribe to a paid plan.', type: 'warning' });
-                }
-
-                alert(" Email Verified Successfully!");
-                alert(` Company "${this.pendingRegistration.company_name}" Created!\n\nCompany ID: ${this.pendingRegistration.company_id}\n\nSelect your plan to get started...`);
-
-                const user = this.managers[this.pendingRegistration.username];
-                this.currentUser = { username: this.pendingRegistration.username, ...user };
-                localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
-                this.clearPendingRegistration();
-                this.setupRealtimeSubscriptions();
-                this.showView('view-select-plan');
-                return;
-
-            } else if (this.pendingRegistration.type === 'employee') {
-                this.pendingRegistration.employeeData.verified = true;
-                await this.saveEmployee(this.pendingRegistration.username, this.pendingRegistration.employeeData);
-                alert(" Email Verified Successfully!");
-                alert(` Account Created!\n\nUsername: ${this.pendingRegistration.username}\n\nPlease login with your credentials.`);
-                const usernameField = document.getElementById('auth-username');
-                if (usernameField) usernameField.value = this.pendingRegistration.username;
+            if (error && String(error.message || '').toLowerCase().includes('geofence_radius_m')) {
+                console.warn('geofence_radius_m column not found, retrying without it...');
+                ({ data, error } = await supabase.from('subscriptions').upsert(subscriptionData, { onConflict: 'company_id' }));
             }
 
-            this.clearPendingRegistration();
-            this.showView('view-auth');
+            if (error) { console.error('Supabase upsert error:', error); throw error; }
+
+            console.log('Trial subscription created successfully:', data);
+            return data;
         } catch (error) {
-            console.error('Error verifying OTP:', error);
-            alert(' Invalid or expired verification code. Please try again.\n\nError: ' + error.message);
+            console.error('Error creating trial subscription:', error);
+            console.error('Full error object:', JSON.stringify(error, null, 2));
+            throw error;
         }
     }
 
-    async login() {
-        const usernameInput = document.getElementById('auth-username');
-        const companyInput = document.getElementById('auth-company');
-        const username = usernameInput.value.trim().toLowerCase();
-        let companyId = companyInput.value.trim().toUpperCase();
+    isSubscriptionPeriodActive(data) {
+        if (!data?.trial_end) return false;
+        const end = new Date(data.trial_end);
+        if (Number.isNaN(end.getTime()) || new Date() >= end) return false;
+        return data.subscription_status === 'trial' || data.subscription_status === 'active';
+    }
 
-        if (!username) return alert("Please enter your Username");
+    async checkSubscription() {
+        if (!this.currentUser || this.currentUser.role !== 'manager') return true;
+        try {
+            const { data, error } = await supabase.from('subscriptions').select('*').eq('company_id', this.currentUser.company_id).maybeSingle();
+            if (error || !data) return false;
+            return this.isSubscriptionPeriodActive(data);
+        } catch { return false; }
+    }
 
-        const user = this.managers[username] || this.employees[username];
-        if (!user) return alert("User not found! Please Register first.");
+    async getTrialDaysRemaining() {
+        try {
+            const { data, error } = await supabase.from('subscriptions').select('trial_end').eq('company_id', this.currentUser.company_id).maybeSingle();
+            if (error || !data?.trial_end) return 0;
+            const daysLeft = Math.ceil((new Date(data.trial_end) - new Date()) / (1000 * 60 * 60 * 24));
+            return Math.max(0, daysLeft);
+        } catch { return 0; }
+    }
 
-        if (!companyId) {
-            if (user.company_id) {
-                companyId = user.company_id;
-                companyInput.value = companyId;
-                alert(`ℹ Found Company ID: ${companyId}\nProcessing Login...`);
-            } else {
-                return alert("You do not have a Company ID yet.\nPlease ask your Manager to link your account.");
-            }
-        }
+    async getSubscriptionStatus() {
+        try {
+            const { data, error } = await supabase.from('subscriptions').select('*').eq('company_id', this.currentUser.company_id).maybeSingle();
+            if (error || !data) return { status: 'none', daysLeft: 0, plan: 'free' };
+            if (!data.trial_end) return {
+                status: data.subscription_status || 'none',
+                daysLeft: 0,
+                plan: data.subscription_plan || 'trial',
+                employees: data.employee_count || 5
+            };
+            const end = new Date(data.trial_end);
+            if (Number.isNaN(end.getTime())) return {
+                status: data.subscription_status || 'none',
+                daysLeft: 0,
+                plan: data.subscription_plan || 'trial',
+                employees: data.employee_count || 5
+            };
+            const daysLeft = Math.ceil((end - new Date()) / (1000 * 60 * 60 * 24));
+            return {
+                status: data.subscription_status,
+                daysLeft: Math.max(0, daysLeft),
+                plan: data.subscription_plan || 'trial',
+                employees: data.employee_count || 5
+            };
+        } catch { return { status: 'none', daysLeft: 0, plan: 'free' }; }
+    }
 
-        if (user.company_id && user.company_id !== companyId) return alert(` Incorrect Company ID.\nThis user belongs to: ${user.company_id}`);
-
-        const credentialInput = document.getElementById('auth-passcode')?.value?.trim() || '';
-        if (user.role === 'manager') {
-            if (!credentialInput) return alert('Enter your password to login.');
-            if (!user.password) return alert('This manager account is missing a password. Please contact support / re-register.');
-            if (credentialInput !== String(user.password)) return alert(' Invalid password.');
-        } else if (user.passcode) {
-            if (!credentialInput) return alert(` This account is protected.\nEnter your Passcode to login.`);
-            if (credentialInput !== String(user.passcode)) return alert(` Invalid Passcode.`);
-        }
-
-        if (user.verified === false) {
-            this.pendingUser = { username, ...user };
-            this.showView('view-verify');
+    async updateTrialStatus() {
+        const daysLeft = await this.getTrialDaysRemaining();
+        const daysDisplay = document.getElementById('trial-days-left');
+        if (daysDisplay) daysDisplay.innerText = daysLeft;
+        const statusDisplay = document.getElementById('trial-status');
+        if (!statusDisplay) return;
+        const sub = await this.getSubscriptionStatus();
+        if (sub.status === 'active') {
+            statusDisplay.innerHTML = daysLeft <= 0
+                ? '<strong style="color: var(--amber);">Renewal due.</strong> Extend your plan to keep full access.'
+                : `Your <strong>${sub.plan}</strong> plan renews in <strong style="color: var(--green);">${daysLeft}</strong> day${daysLeft !== 1 ? 's' : ''}.`;
             return;
         }
-
-        if (!user.company_id) return alert(`You are not linked to a company yet.\nAsk your Manager to register you using username: "${username}".`);
-
-        if (user.role === 'manager') {
-            const { data: existingSub } = await supabase.from('subscriptions').select('company_id').eq('company_id', companyId).maybeSingle();
-            if (!existingSub) {
-                try {
-                    await this.createTrialSubscription(companyId);
-                } catch (e) {
-                    console.error('Subscription setup failed:', e);
-                    console.error('Company ID:', companyId);
-                    console.error('Error details:', e?.message, e?.details, e?.hint);
-                    return alert('Could not start billing trial for this workspace. Please try again or contact support.');
-                }
-            }
+        if (daysLeft <= 0) {
+            statusDisplay.innerHTML = '<strong style="color: var(--red);">Your trial has expired.</strong> Please upgrade to continue.';
+        } else if (daysLeft <= 7) {
+            statusDisplay.innerHTML = `You have <strong style="color: var(--amber);">${daysLeft}</strong> day${daysLeft !== 1 ? 's' : ''} left in your free trial.`;
         }
-
-        if (user.role === 'employee') {
-            const currentFingerprint = await this.generateDeviceFingerprint();
-            if (user.device_fingerprint && user.device_fingerprint !== currentFingerprint) {
-                return alert(' Device mismatch detected.\n\nThis account is locked to another device.\nPlease contact your manager to reset your device binding.');
-            }
-            if (!user.device_fingerprint) {
-                user.device_fingerprint = currentFingerprint;
-                user.device_bound_at = new Date().toISOString();
-                await this.saveEmployee(username, user);
-            }
-
-            try {
-                await this.loadGeofenceRadiusFromSubscription(companyId);
-                this._lastGeofenceRadiusFetchMs = Date.now();
-                await this.getFreshPosition(10000);
-            } catch (err) {
-                alert(`GPS Error: ${err.message}\n\nPlease allow GPS access and try again.`);
-                return;
-            }
-
-            const site = Object.values(this.sites).find(s => String(s.id) === String(user.assigned_site_id) && s.company_id === user.company_id);
-            if (!site) return alert("Error: Assigned Worksite not found. Contact Manager.");
-
-            const dist = this.getDistanceFromLatLonInMeters(this.currentPosition.lat, this.currentPosition.lng, site.lat, site.lng);
-            const radius = this.getEffectiveGeofenceRadius();
-            if (dist > radius) return alert(`🚫 ACCESS DENIED\n\nYou are ${Math.round(dist)} meters away from ${site.name}.\n\nYou must be within ${radius}m to log in.`);
-        }
-
-        if (user.role === 'manager') {
-            await this.loadGeofenceRadiusFromSubscription(companyId);
-            this._lastGeofenceRadiusFetchMs = Date.now();
-        }
-
-        this.currentUser = { username, ...user };
-        localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
-        this.setupRealtimeSubscriptions();
-        this.showView(user.role === 'manager' ? 'view-manager' : 'view-employee');
-        this.refreshDashboard();
-        if (user.role === 'employee') this.startGeofenceWatchdog();
     }
 
-    async loginWithBiometrics() {
-        const usernameInput = document.getElementById('auth-username');
-        const companyInput = document.getElementById('auth-company');
-        const username = usernameInput?.value?.trim()?.toLowerCase();
-        let companyId = companyInput?.value?.trim()?.toUpperCase();
-        if (!username) return alert('Enter your username first.');
-
-        const user = this.employees[username];
-        if (!user) return alert('Biometric login is available for employees only.');
-        if (!companyId) {
-            companyId = user.company_id || '';
-            if (companyInput && companyId) companyInput.value = companyId;
+    async updateSubscriptionStatusCard(daysLeft) {
+        const card = document.getElementById('subscription-status-card');
+        const badge = document.getElementById('plan-badge');
+        const info = document.getElementById('trial-info');
+        if (!card || !badge) return;
+        card.style.display = 'block';
+        const sub = await this.getSubscriptionStatus();
+        if (sub.status === 'active' && sub.plan !== 'trial') {
+            badge.innerText = '✓ Subscribed';
+            badge.style.color = 'var(--green)';
+            if (info) info.innerText = daysLeft <= 0 ? `Plan: ${sub.plan}. Renew to keep full access.` : `Plan: ${sub.plan}. Renews in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}.`;
+            return;
         }
-        if (!companyId || user.company_id !== companyId) return alert('Enter a valid company ID for this account.');
-
-        if (!window.PublicKeyCredential || !navigator.credentials) {
-            return alert('Biometrics are not supported on this browser/device.');
+        if (daysLeft <= 0) {
+            badge.innerText = '⏰ Trial Expired';
+            badge.style.color = 'var(--red)';
+            if (info) info.innerText = 'Your free trial has ended. Please upgrade to continue.';
+        } else if (daysLeft <= 7) {
+            badge.innerText = `⚠️ ${daysLeft} Day${daysLeft !== 1 ? 's' : ''} Left`;
+            badge.style.color = 'var(--amber)';
+            if (info) info.innerText = `Your free trial expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}.`;
+    } else {
+            badge.innerText = `✓ Free Trial`;
+            badge.style.color = 'var(--green)';
+            if (info) info.innerText = `Enjoy your free trial! ${daysLeft} days remaining.`;
         }
+    }
 
-        const fingerprint = await this.generateDeviceFingerprint();
-        if (user.device_fingerprint && user.device_fingerprint !== fingerprint) {
-            return alert(' Device mismatch detected.\n\nThis account is locked to another device.\nPlease contact your manager to reset your device binding.');
-        }
-        const biometricMap = this.getBiometricMap();
-        const biometricKey = this.getBiometricKey(username, user.company_id, fingerprint);
-        const savedCredential = biometricMap[biometricKey];
-        if (!savedCredential?.credentialId) {
-            return alert('Biometrics are not enabled on this device for this account.');
-        }
+    selectPlanAndContinue(maxEmployees, planName) {
+        if (!this.currentUser) return alert('Session expired. Please login.');
+        this.showToast({ message: `✓ ${planName} plan selected!`, type: 'success' });
+        this.showView('view-manager');
+        this.refreshDashboard();
+    }
 
-        try {
-            const challenge = crypto.getRandomValues(new Uint8Array(32));
-            await navigator.credentials.get({
-                publicKey: {
-                    challenge,
-                    timeout: 60000,
-                    userVerification: 'required',
-                    allowCredentials: [{
-                        id: this.base64ToArrayBuffer(savedCredential.credentialId),
-                        type: 'public-key'
-                    }]
-                }
-            });
+    // ─── PAYMENT ─────────────────────────────────────────────────────────────
 
-            try {
-                await this.loadGeofenceRadiusFromSubscription(companyId);
-                this._lastGeofenceRadiusFetchMs = Date.now();
-                await this.getFreshPosition(10000);
-            } catch (err) {
-                return alert(` GPS Error: ${err.message}\n\nPlease allow GPS access and try again.`);
+    loadPaystackScript() {
+        return new Promise((resolve, reject) => {
+            if (typeof PaystackPop !== 'undefined') { resolve(); return; }
+            const existing = document.querySelector('script[src*="js.paystack.co"]');
+            if (existing) {
+                if (typeof PaystackPop !== 'undefined') { resolve(); return; }
+                existing.addEventListener('load', () => resolve());
+                existing.addEventListener('error', () => reject(new Error('Paystack script failed')));
+                return;
             }
-            const site = Object.values(this.sites).find(s => String(s.id) === String(user.assigned_site_id) && s.company_id === user.company_id);
-            if (!site) return alert("Error: Assigned Worksite not found. Contact Manager.");
-            const dist = this.getDistanceFromLatLonInMeters(this.currentPosition.lat, this.currentPosition.lng, site.lat, site.lng);
-            const radius = this.getEffectiveGeofenceRadius();
-            if (dist > radius) return alert(` ACCESS DENIED\n\nYou are ${Math.round(dist)} meters away from ${site.name}.\n\nYou must be within ${radius}m to log in.`);
+            const s = document.createElement('script');
+            s.src = 'https://js.paystack.co/v1/inline.js';
+            s.defer = true;
+            s.onload = () => resolve();
+            s.onerror = () => reject(new Error('Paystack script failed'));
+            document.head.appendChild(s);
+        });
+    }
 
-            this.currentUser = { username, ...user };
-            localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
-            this.setupRealtimeSubscriptions();
-            this.showView('view-employee');
+    initiatePayment(planName, amount, maxEmployees) {
+        if (!this.currentUser) return;
+        const manager = this.managers[this.currentUser.username];
+        const email = manager?.email || '';
+        if (!email) return alert('Manager email not found. Please contact support.');
+
+        const openPaystack = () => {
+            if (typeof PaystackPop === 'undefined') return alert('Payment script is still loading. Wait a moment and tap Subscribe again.');
+            const handler = PaystackPop.setup({
+                key: 'pk_test_554291712d47569a3381b5b6c48cc64d03053dd5',
+                email, amount, currency: 'GHS',
+                ref: `WW-${this.currentUser.company_id}-${Date.now()}`,
+                metadata: { company_id: this.currentUser.company_id, plan: planName, max_employees: maxEmployees },
+                callback: (response) => { this.onPaymentSuccess(response, planName, maxEmployees); },
+                onClose: () => { this.showToast({ message: 'Payment cancelled', type: 'warning' }); }
+            });
+            handler.openIframe();
+        };
+
+        this.loadPaystackScript().then(openPaystack).catch(() => alert('Could not load the payment provider. Check your connection and try again.'));
+    }
+
+    async onPaymentSuccess(response, planName, maxEmployees) {
+        try {
+            const subscriptionEndDate = new Date();
+            subscriptionEndDate.setDate(subscriptionEndDate.getDate() + 30);
+            const base = {
+                company_id: this.currentUser.company_id,
+                subscription_plan: planName,
+                subscription_status: 'active',
+                trial_end: subscriptionEndDate.toISOString(),
+                employee_count: maxEmployees,
+                paystack_ref: response.reference
+            };
+            const withRadius = { ...base, geofence_radius_m: this.getEffectiveGeofenceRadius() };
+            let { error } = await supabase.from('subscriptions').upsert(withRadius, { onConflict: 'company_id' });
+            if (error && String(error.message || '').toLowerCase().includes('geofence_radius_m')) {
+                ({ error } = await supabase.from('subscriptions').upsert(base, { onConflict: 'company_id' }));
+            }
+            if (error) throw error;
+            this.showToast({ message: `${planName} plan activated! Valid until ${subscriptionEndDate.toLocaleDateString()}`, type: 'success' });
+            this.showView('view-manager');
             this.refreshDashboard();
-            this.startGeofenceWatchdog();
         } catch (error) {
-            console.error('Biometric login failed:', error);
-            alert('Biometric verification failed. You can still log in with passcode/password.');
+            alert('Payment recorded but failed to update subscription: ' + error.message);
         }
+    }
+
+    // ─── REALTIME ────────────────────────────────────────────────────────────
+
+    setupRealtimeSubscriptions() {
+        try {
+            if (!this.currentUser?.company_id) return;
+            const companyId = this.currentUser.company_id;
+
+            const employeesChannel = supabase.channel('employees_changes')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'employees', filter: `company_id=eq.${companyId}` }, (payload) => {
+                    const newData = payload.new;
+                    if (newData?.username) {
+                        this.employees[newData.username] = newData;
+                        if (this.currentUser?.username === newData.username) {
+                            this.currentUser = { ...this.currentUser, ...newData };
+                            localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
+                        }
+                        if (this.currentUser?.role === 'manager') this.refreshDashboard();
+                    }
+                }).subscribe();
+            this.subscriptions.employees = employeesChannel;
+
+            const checkinsChannel = supabase.channel('checkins_changes')
+                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'checkins', filter: `company_id=eq.${companyId}` }, (payload) => {
+                    const newCheckin = payload.new;
+                    if (newCheckin?.company_id) {
+                        if (!this.logs[newCheckin.company_id]) this.logs[newCheckin.company_id] = [];
+                        this.logs[newCheckin.company_id].unshift(newCheckin);
+                        if (this.currentUser?.role === 'manager') this.refreshDashboard();
+                    }
+                }).subscribe();
+            this.subscriptions.checkins = checkinsChannel;
+        } catch (error) {
+            console.error('Error setting up real-time subscriptions:', error);
+        }
+    }
+
+    // ─── AUTH STATE ──────────────────────────────────────────────────────────
+
+    setupAuthStateListener() {
+        supabase.auth.onAuthStateChange(async (event, session) => {
+            console.log('Auth state changed:', event, session);
+            if (event === 'SIGNED_IN' && session && session.user) {
+                if (!this._otpJustVerified) {
+                    console.log('Ignoring auto SIGNED_IN on page load');
+                    return;
+                }
+                this._otpJustVerified = false;
+            }
+        });
+    }
+
+    setupAuthInputListeners() {
+        const usernameField = document.getElementById('auth-username');
+        const companyField = document.getElementById('auth-company');
+        if (usernameField) usernameField.addEventListener('input', () => { this.updateBiometricLoginButton(); });
+        if (companyField) companyField.addEventListener('input', () => { this.updateBiometricLoginButton(); });
+    }
+
+    clearPendingRegistration() {
+        this.pendingRegistration = null;
+        this.pendingUser = null;
+        localStorage.removeItem('hrapp_pending_registration');
+    }
+
+    // ─── BIOMETRICS ──────────────────────────────────────────────────────────
+
+    async hashString(input) {
+        const encoded = new TextEncoder().encode(input);
+        const digest = await crypto.subtle.digest('SHA-256', encoded);
+        return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    async generateDeviceFingerprint() {
+        const nav = window.navigator;
+        const screenInfo = window.screen || {};
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown';
+        const fingerprintPayload = {
+            userAgent: nav.userAgent || '', platform: nav.platform || '',
+            language: nav.language || '', languages: (nav.languages || []).join(','),
+            hardwareConcurrency: nav.hardwareConcurrency || 0, deviceMemory: nav.deviceMemory || 0,
+            maxTouchPoints: nav.maxTouchPoints || 0,
+            screen: `${screenInfo.width || 0}x${screenInfo.height || 0}x${screenInfo.colorDepth || 0}`,
+            timezone: tz
+        };
+        return this.hashString(JSON.stringify(fingerprintPayload));
+    }
+
+    getBiometricMap() {
+        try {
+            const raw = localStorage.getItem(this.BIOMETRIC_STORAGE_KEY);
+            return raw ? JSON.parse(raw) : {};
+        } catch (error) {
+            console.warn('Failed to read biometric storage:', error);
+            return {};
+        }
+    }
+
+    setBiometricMap(nextMap) {
+        localStorage.setItem(this.BIOMETRIC_STORAGE_KEY, JSON.stringify(nextMap));
+    }
+
+    getBiometricKey(username, companyId, fingerprint) {
+        return `${username}::${companyId || 'nocompany'}::${fingerprint || 'nofp'}`;
+    }
+
+    arrayBufferToBase64(buffer) {
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        bytes.forEach(byte => { binary += String.fromCharCode(byte); });
+        return btoa(binary);
+    }
+
+    base64ToArrayBuffer(base64) {
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+        return bytes.buffer;
+    }
+
+    async updateBiometricLoginButton() {
+        const biometricBtn = document.getElementById('auth-biometric-btn');
+        if (!biometricBtn) return;
+        const username = document.getElementById('auth-username')?.value?.trim()?.toLowerCase();
+        const companyId = document.getElementById('auth-company')?.value?.trim()?.toUpperCase();
+        if (!username) { biometricBtn.style.display = 'none'; return; }
+        const user = this.managers[username] || this.employees[username];
+        if (!user || user.role !== 'employee' || !user.company_id || (companyId && user.company_id !== companyId)) {
+            biometricBtn.style.display = 'none'; return;
+        }
+        if (!window.PublicKeyCredential) { biometricBtn.style.display = 'none'; return; }
+        const fingerprint = await this.generateDeviceFingerprint();
+        const biometricMap = this.getBiometricMap();
+        const key = this.getBiometricKey(username, user.company_id, fingerprint);
+        biometricBtn.style.display = biometricMap[key]?.credentialId ? 'block' : 'none';
     }
 
     async enableBiometrics() {
         if (!this.currentUser || this.currentUser.role !== 'employee') return;
-        if (!window.PublicKeyCredential || !navigator.credentials) {
-            return alert('Biometrics are not supported on this browser/device.');
-        }
-
+        if (!window.PublicKeyCredential || !navigator.credentials) return alert('Biometrics are not supported on this browser/device.');
         const employee = this.employees[this.currentUser.username];
         if (!employee) return alert('Employee profile not found.');
-
         try {
             const fingerprint = await this.generateDeviceFingerprint();
-            if (employee.device_fingerprint && employee.device_fingerprint !== fingerprint) {
-                return alert('This device is not the bound login device. Contact your manager to reset binding.');
-            }
-            if (!employee.device_fingerprint) {
-                employee.device_fingerprint = fingerprint;
-                employee.device_bound_at = new Date().toISOString();
-            }
-
+            if (employee.device_fingerprint && employee.device_fingerprint !== fingerprint) return alert('This device is not the bound login device. Contact your manager to reset binding.');
+            if (!employee.device_fingerprint) { employee.device_fingerprint = fingerprint; employee.device_bound_at = new Date().toISOString(); }
             const challenge = crypto.getRandomValues(new Uint8Array(32));
             const userId = new TextEncoder().encode(`${employee.company_id}:${this.currentUser.username}`);
             const credential = await navigator.credentials.create({
                 publicKey: {
-                    challenge,
-                    rp: { name: 'WorkWatch' },
-                    user: {
-                        id: userId,
-                        name: this.currentUser.username,
-                        displayName: this.currentUser.username
-                    },
-                    pubKeyCredParams: [
-                        { type: 'public-key', alg: -7 },
-                        { type: 'public-key', alg: -257 }
-                    ],
-                    authenticatorSelection: { userVerification: 'required' },
-                    timeout: 60000,
-                    attestation: 'none'
+                    challenge, rp: { name: 'WorkWatch' },
+                    user: { id: userId, name: this.currentUser.username, displayName: this.currentUser.username },
+                    pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+                    authenticatorSelection: { userVerification: 'required' }, timeout: 60000, attestation: 'none'
                 }
             });
-
             if (!credential || !credential.rawId) return alert('Biometric setup failed.');
-
             const biometricMap = this.getBiometricMap();
             const biometricKey = this.getBiometricKey(this.currentUser.username, employee.company_id, fingerprint);
             biometricMap[biometricKey] = { credentialId: this.arrayBufferToBase64(credential.rawId) };
             this.setBiometricMap(biometricMap);
-
             employee.biometric_enabled = true;
             await this.saveEmployee(this.currentUser.username, employee);
             this.currentUser = { ...this.currentUser, ...employee };
@@ -936,7 +709,6 @@ class HRApp {
         const biometricKey = this.getBiometricKey(this.currentUser.username, employee.company_id, fingerprint);
         delete biometricMap[biometricKey];
         this.setBiometricMap(biometricMap);
-
         employee.biometric_enabled = false;
         await this.saveEmployee(this.currentUser.username, employee);
         this.currentUser = { ...this.currentUser, ...employee };
@@ -946,25 +718,38 @@ class HRApp {
         alert('Biometric sign in disabled for this device.');
     }
 
-    logout() {
-        this.currentUser = null;
-        this.clearPendingRegistration();
-        localStorage.removeItem('hrapp_user');
-        this.showView('view-auth');
-        this.updateBiometricLoginButton();
-        this.stopGeofenceWatchdog();
-        if (this.timerInterval) clearInterval(this.timerInterval);
-        if (this.subscriptions.employees) {
-            supabase.removeChannel(this.subscriptions.employees);
-            this.subscriptions.employees = null;
-        }
-        if (this.subscriptions.checkins) {
-            supabase.removeChannel(this.subscriptions.checkins);
-            this.subscriptions.checkins = null;
-        }
+    // ─── GEOLOCATION ─────────────────────────────────────────────────────────
+
+    setupLocationWatcher() { this.watchLocation(); }
+
+    async getFreshPosition(timeout = 10000) {
+        return new Promise((resolve, reject) => {
+            if (!navigator.geolocation) { reject(new Error('Geolocation is not supported by your browser.')); return; }
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                    this.currentPosition = coords;
+                    this.updateUIWithLocation();
+                    resolve(coords);
+                },
+                (err) => reject(new Error(err.message || 'Unable to get location')),
+                { enableHighAccuracy: true, timeout, maximumAge: 0 }
+            );
+        });
     }
 
-    // --- Geolocation ---
+    startGeofenceWatchdog() {
+        if (this.geofenceInterval) clearInterval(this.geofenceInterval);
+        this.geofenceInterval = setInterval(async () => {
+            if (!this.currentUser || this.currentUser.role !== 'employee') return;
+            try { await this.getFreshPosition(8000); } catch (err) { console.warn('Geofence watchdog GPS refresh failed:', err?.message || err); }
+            await this.monitorGeofence();
+        }, 15000);
+    }
+
+    stopGeofenceWatchdog() {
+        if (this.geofenceInterval) { clearInterval(this.geofenceInterval); this.geofenceInterval = null; }
+    }
 
     watchLocation() {
         if (!window.isSecureContext && window.location.hostname !== 'localhost') {
@@ -972,14 +757,10 @@ class HRApp {
             if (statusEl) { statusEl.className = 'gps-pill error'; statusEl.innerHTML = `<span class="gps-dot"></span><span>HTTPS required for GPS</span>`; }
             return alert("GPS REQUIREMENT MISSING:\n\nThis app must be run over HTTPS to use Location features.");
         }
-
         if (!navigator.geolocation) { alert("Geolocation is not supported by your browser"); return; }
-
         const statusEl = document.getElementById('auth-gps-status');
         if (statusEl) { statusEl.className = 'gps-pill waiting'; statusEl.innerHTML = `<span class="gps-dot"></span><span>Acquiring GPS signal...</span>`; }
-
         const options = { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 };
-
         this.watchId = navigator.geolocation.watchPosition(
             (position) => {
                 this.currentPosition = { lat: position.coords.latitude, lng: position.coords.longitude };
@@ -990,10 +771,7 @@ class HRApp {
                 console.error("GPS Watch Error:", error);
                 if (error.code === 3 || error.code === 2) {
                     if (statusEl) { statusEl.className = 'gps-pill waiting'; statusEl.innerHTML = `<span class="gps-dot"></span><span>Switching to network location...</span>`; }
-                    if (this.watchId) {
-                        navigator.geolocation.clearWatch(this.watchId);
-                        this.watchId = null;
-                    }
+                    if (this.watchId) { navigator.geolocation.clearWatch(this.watchId); this.watchId = null; }
                     this.watchId = navigator.geolocation.watchPosition(
                         (pos) => { this.currentPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude }; this.updateUIWithLocation(); if (this.currentUser && this.currentUser.role === 'employee') this.monitorGeofence(); },
                         (err) => {
@@ -1040,49 +818,312 @@ class HRApp {
                 alert(` GEOFENCE ALERT\n\nYou have left the worksite boundary (${Math.round(dist)}m from center; limit ${radius}m).\n\nYou have been automatically logged out.`);
                 await this.checkOut("Geofence Exit");
                 this.logout();
-            } finally {
-                this.geofenceLock = false;
-            }
+            } finally { this.geofenceLock = false; }
         }
     }
 
-    // --- View Management ---
+    // ─── AUTHENTICATION ──────────────────────────────────────────────────────
+
+    async registerNewCompany() {
+        const companyName = document.getElementById('reg-company-name').value.trim();
+        const managerName = document.getElementById('reg-manager-name').value.trim().toLowerCase();
+        const managerEmail = document.getElementById('reg-manager-email').value.trim();
+        const managerPassword = document.getElementById('reg-manager-password').value.trim();
+        const companyIdInput = document.getElementById('reg-company-id').value.trim().toUpperCase();
+
+        if (!companyName || !managerName || !managerEmail) return alert("Please fill all fields");
+        if (!managerPassword) return alert("Please create a password for your account.");
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(managerEmail)) return alert("Please enter a valid email address");
+        if (this.managers[managerName]) return alert("Username already taken!");
+
+        try {
+            const { data: existingEmails, error: queryError } = await supabase.from('managers').select('email').eq('email', managerEmail).limit(1);
+            if (queryError) return alert("Error checking email: " + queryError.message);
+            if (existingEmails && existingEmails.length > 0) return alert("This email is already registered.");
+        } catch (error) { return alert("Error validating email: " + error.message); }
+
+        try {
+            const companyId = companyIdInput || (companyName.substring(0, 4) + Math.floor(1000 + Math.random() * 9000)).toUpperCase();
+            const { error } = await supabase.auth.signInWithOtp({ email: managerEmail, options: { shouldCreateUser: true, emailRedirectTo: null } });
+            if (error) throw error;
+            this.pendingRegistration = {
+                email: managerEmail, username: managerName, type: 'manager',
+                company_id: companyId, company_name: companyName,
+                managerData: { company_id: companyId, password: managerPassword, role: 'manager', name: managerName, email: managerEmail, verified: false }
+            };
+            localStorage.setItem('hrapp_pending_registration', JSON.stringify(this.pendingRegistration));
+            this.showToast(`✉️ 6-digit OTP sent to ${managerEmail}. Check your inbox!`, 'success');
+            this.showView('view-verify');
+        } catch (error) { alert('Failed to send verification code: ' + error.message); }
+    }
+
+    async registerNewEmployeeUser() {
+        const username = document.getElementById('reg-emp-username-self').value.trim().toLowerCase();
+        const email = document.getElementById('reg-emp-email-self').value.trim();
+        const phone = document.getElementById('reg-emp-phone-self').value.trim();
+        const passcode = document.getElementById('reg-emp-passcode-self').value.trim();
+
+        if (!username) return alert("Please enter a username.");
+        if (!email) return alert("Email is required for verification.");
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) return alert("Please enter a valid email address.");
+        if (this.employees[username] || this.managers[username]) return alert("Username already taken!");
+
+        try {
+            const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true, emailRedirectTo: null } });
+            if (error) throw error;
+            this.pendingRegistration = {
+                email, username, type: 'employee',
+                employeeData: { email, phone: phone || null, passcode: passcode || null, company_id: null, assigned_site_id: null, status: 'checked-out', verified: false }
+            };
+            localStorage.setItem('hrapp_pending_registration', JSON.stringify(this.pendingRegistration));
+            this.showToast(`✉️ 6-digit OTP sent to ${email}. Check your inbox!`, 'success');
+            this.showView('view-verify');
+        } catch (error) { alert('Failed to send verification code: ' + error.message); }
+    }
+
+    async resendOtp() {
+        // Restore from localStorage if memory was cleared (e.g. page refresh)
+        if (!this.pendingRegistration) {
+            const stored = localStorage.getItem('hrapp_pending_registration');
+            if (stored) this.pendingRegistration = JSON.parse(stored);
+        }
+        if (!this.pendingRegistration?.email) {
+            return this.showToast({ message: 'No pending registration found. Please register again.', type: 'error' });
+        }
+        try {
+            const { error } = await supabase.auth.signInWithOtp({
+                email: this.pendingRegistration.email,
+                options: { shouldCreateUser: true, emailRedirectTo: null }
+            });
+            if (error) throw error;
+            this.showToast({ message: '✉️ New code sent! Check your inbox.', type: 'success' });
+        } catch (e) {
+            this.showToast({ message: 'Failed to resend: ' + e.message, type: 'error' });
+        }
+    }
+
+    async verifyAccount() {
+        // Restore from localStorage if memory was cleared (e.g. page refresh)
+        if (!this.pendingRegistration) {
+            const stored = localStorage.getItem('hrapp_pending_registration');
+            if (stored) this.pendingRegistration = JSON.parse(stored);
+        }
+
+        const codeInput = document.getElementById('verify-code').value.trim();
+        if (!this.pendingRegistration) return this.showView('view-auth');
+        if (!codeInput) return alert("Please enter the verification code");
+
+        try {
+            console.log('Verifying OTP for:', this.pendingRegistration.email, 'token:', codeInput);
+            this._otpJustVerified = true;
+            const { data, error } = await supabase.auth.verifyOtp({
+                email: this.pendingRegistration.email,
+                token: codeInput,
+                type: 'email'
+            });
+            if (error) throw error;
+
+            if (this.pendingRegistration.type === 'manager') {
+                this.pendingRegistration.managerData.verified = true;
+                await this.saveManager(this.pendingRegistration.username, this.pendingRegistration.managerData);
+                try {
+                    await this.createTrialSubscription(this.pendingRegistration.company_id);
+                } catch (e) {
+                    console.error('Trial subscription creation failed during registration:', e);
+                    this.showToast({ message: 'Warning: Trial subscription setup encountered an issue, but your account was created.', type: 'warning' });
+                }
+                alert(" Email Verified Successfully!");
+                alert(` Company "${this.pendingRegistration.company_name}" Created!\n\nCompany ID: ${this.pendingRegistration.company_id}\n\nSelect your plan to get started...`);
+                const user = this.managers[this.pendingRegistration.username];
+                this.currentUser = { username: this.pendingRegistration.username, ...user };
+                localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
+                this.clearPendingRegistration();
+                this.setupRealtimeSubscriptions();
+                this.showView('view-select-plan');
+                return;
+
+            } else if (this.pendingRegistration.type === 'employee') {
+                this.pendingRegistration.employeeData.verified = true;
+                await this.saveEmployee(this.pendingRegistration.username, this.pendingRegistration.employeeData);
+                alert(" Email Verified Successfully!");
+                alert(` Account Created!\n\nUsername: ${this.pendingRegistration.username}\n\nPlease login with your credentials.`);
+                const usernameField = document.getElementById('auth-username');
+                if (usernameField) usernameField.value = this.pendingRegistration.username;
+            }
+
+            this.clearPendingRegistration();
+            this.showView('view-auth');
+        } catch (error) {
+            console.error('Error verifying OTP:', error);
+            alert(' Invalid or expired verification code. Please try again.\n\nError: ' + error.message);
+        }
+    }
+
+    async login() {
+        const usernameInput = document.getElementById('auth-username');
+        const companyInput = document.getElementById('auth-company');
+        const username = usernameInput.value.trim().toLowerCase();
+        let companyId = companyInput.value.trim().toUpperCase();
+
+        if (!username) return alert("Please enter your Username");
+        const user = this.managers[username] || this.employees[username];
+        if (!user) return alert("User not found! Please Register first.");
+
+        if (!companyId) {
+            if (user.company_id) {
+                companyId = user.company_id;
+                companyInput.value = companyId;
+                alert(`ℹ Found Company ID: ${companyId}\nProcessing Login...`);
+            } else {
+                return alert("You do not have a Company ID yet.\nPlease ask your Manager to link your account.");
+            }
+        }
+
+        if (user.company_id && user.company_id !== companyId) return alert(` Incorrect Company ID.\nThis user belongs to: ${user.company_id}`);
+
+        const credentialInput = document.getElementById('auth-passcode')?.value?.trim() || '';
+        if (user.role === 'manager') {
+            if (!credentialInput) return alert('Enter your password to login.');
+            if (!user.password) return alert('This manager account is missing a password. Please contact support / re-register.');
+            if (credentialInput !== String(user.password)) return alert(' Invalid password.');
+        } else if (user.passcode) {
+            if (!credentialInput) return alert(` This account is protected.\nEnter your Passcode to login.`);
+            if (credentialInput !== String(user.passcode)) return alert(` Invalid Passcode.`);
+        }
+
+        if (user.verified === false) {
+            this.pendingUser = { username, ...user };
+            this.showView('view-verify');
+            return;
+        }
+
+        if (!user.company_id) return alert(`You are not linked to a company yet.\nAsk your Manager to register you using username: "${username}".`);
+
+        if (user.role === 'manager') {
+            const { data: existingSub } = await supabase.from('subscriptions').select('company_id').eq('company_id', companyId).maybeSingle();
+            if (!existingSub) {
+                try {
+                    await this.createTrialSubscription(companyId);
+                } catch (e) {
+                    console.error('Subscription setup failed:', e);
+                    return alert('Could not start billing trial for this workspace. Please try again or contact support.');
+                }
+            }
+        }
+
+        if (user.role === 'employee') {
+            const currentFingerprint = await this.generateDeviceFingerprint();
+            if (user.device_fingerprint && user.device_fingerprint !== currentFingerprint) return alert(' Device mismatch detected.\n\nThis account is locked to another device.\nPlease contact your manager to reset your device binding.');
+            if (!user.device_fingerprint) {
+                user.device_fingerprint = currentFingerprint;
+                user.device_bound_at = new Date().toISOString();
+                await this.saveEmployee(username, user);
+            }
+            try {
+                await this.loadGeofenceRadiusFromSubscription(companyId);
+                this._lastGeofenceRadiusFetchMs = Date.now();
+                await this.getFreshPosition(10000);
+            } catch (err) {
+                alert(`GPS Error: ${err.message}\n\nPlease allow GPS access and try again.`);
+                return;
+            }
+            const site = Object.values(this.sites).find(s => String(s.id) === String(user.assigned_site_id) && s.company_id === user.company_id);
+            if (!site) return alert("Error: Assigned Worksite not found. Contact Manager.");
+            const dist = this.getDistanceFromLatLonInMeters(this.currentPosition.lat, this.currentPosition.lng, site.lat, site.lng);
+            const radius = this.getEffectiveGeofenceRadius();
+            if (dist > radius) return alert(`🚫 ACCESS DENIED\n\nYou are ${Math.round(dist)} meters away from ${site.name}.\n\nYou must be within ${radius}m to log in.`);
+        }
+
+        if (user.role === 'manager') {
+            await this.loadGeofenceRadiusFromSubscription(companyId);
+            this._lastGeofenceRadiusFetchMs = Date.now();
+        }
+
+        this.currentUser = { username, ...user };
+        localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
+        this.setupRealtimeSubscriptions();
+        this.showView(user.role === 'manager' ? 'view-manager' : 'view-employee');
+        this.refreshDashboard();
+        if (user.role === 'employee') this.startGeofenceWatchdog();
+    }
+
+    async loginWithBiometrics() {
+        const usernameInput = document.getElementById('auth-username');
+        const companyInput = document.getElementById('auth-company');
+        const username = usernameInput?.value?.trim()?.toLowerCase();
+        let companyId = companyInput?.value?.trim()?.toUpperCase();
+        if (!username) return alert('Enter your username first.');
+        const user = this.employees[username];
+        if (!user) return alert('Biometric login is available for employees only.');
+        if (!companyId) { companyId = user.company_id || ''; if (companyInput && companyId) companyInput.value = companyId; }
+        if (!companyId || user.company_id !== companyId) return alert('Enter a valid company ID for this account.');
+        if (!window.PublicKeyCredential || !navigator.credentials) return alert('Biometrics are not supported on this browser/device.');
+        const fingerprint = await this.generateDeviceFingerprint();
+        if (user.device_fingerprint && user.device_fingerprint !== fingerprint) return alert(' Device mismatch detected.\n\nThis account is locked to another device.\nPlease contact your manager to reset your device binding.');
+        const biometricMap = this.getBiometricMap();
+        const biometricKey = this.getBiometricKey(username, user.company_id, fingerprint);
+        const savedCredential = biometricMap[biometricKey];
+        if (!savedCredential?.credentialId) return alert('Biometrics are not enabled on this device for this account.');
+        try {
+            const challenge = crypto.getRandomValues(new Uint8Array(32));
+            await navigator.credentials.get({
+                publicKey: { challenge, timeout: 60000, userVerification: 'required', allowCredentials: [{ id: this.base64ToArrayBuffer(savedCredential.credentialId), type: 'public-key' }] }
+            });
+            try {
+                await this.loadGeofenceRadiusFromSubscription(companyId);
+                this._lastGeofenceRadiusFetchMs = Date.now();
+                await this.getFreshPosition(10000);
+            } catch (err) { return alert(` GPS Error: ${err.message}\n\nPlease allow GPS access and try again.`); }
+            const site = Object.values(this.sites).find(s => String(s.id) === String(user.assigned_site_id) && s.company_id === user.company_id);
+            if (!site) return alert("Error: Assigned Worksite not found. Contact Manager.");
+            const dist = this.getDistanceFromLatLonInMeters(this.currentPosition.lat, this.currentPosition.lng, site.lat, site.lng);
+            const radius = this.getEffectiveGeofenceRadius();
+            if (dist > radius) return alert(` ACCESS DENIED\n\nYou are ${Math.round(dist)} meters away from ${site.name}.\n\nYou must be within ${radius}m to log in.`);
+            this.currentUser = { username, ...user };
+            localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
+            this.setupRealtimeSubscriptions();
+            this.showView('view-employee');
+            this.refreshDashboard();
+            this.startGeofenceWatchdog();
+        } catch (error) {
+            console.error('Biometric login failed:', error);
+            alert('Biometric verification failed. You can still log in with passcode/password.');
+        }
+    }
+
+    logout() {
+        this.currentUser = null;
+        this.clearPendingRegistration();
+        localStorage.removeItem('hrapp_user');
+        this.showView('view-auth');
+        this.updateBiometricLoginButton();
+        this.stopGeofenceWatchdog();
+        if (this.timerInterval) clearInterval(this.timerInterval);
+        if (this.subscriptions.employees) { supabase.removeChannel(this.subscriptions.employees); this.subscriptions.employees = null; }
+        if (this.subscriptions.checkins) { supabase.removeChannel(this.subscriptions.checkins); this.subscriptions.checkins = null; }
+    }
+
+    // ─── VIEW MANAGEMENT ─────────────────────────────────────────────────────
 
     showView(viewId) {
         document.querySelectorAll('.view').forEach(el => { el.classList.remove('active'); el.style.display = 'none'; });
         const el = document.getElementById(viewId);
         if (!el) { console.warn('showView: element not found', viewId); return; }
         el.classList.add('active');
-
-        // Update trial status if showing subscription view
-        if (viewId === 'view-subscription' || viewId === 'view-pricing') {
-            this.updateTrialStatus();
-        }
-
+        if (viewId === 'view-subscription' || viewId === 'view-pricing') this.updateTrialStatus();
         const isDesktop = window.innerWidth >= 768;
         const clearLayoutInline = () => {
-            ['display', 'grid-template-columns', 'grid-template-rows', 'height', 'padding', 'gap', 'overflow', 'align-items'].forEach((prop) => {
-                el.style.removeProperty(prop);
-            });
+            ['display', 'grid-template-columns', 'grid-template-rows', 'height', 'padding', 'gap', 'overflow', 'align-items'].forEach(prop => el.style.removeProperty(prop));
         };
         if (isDesktop) {
-            if (viewId === 'view-manager' || viewId === 'view-employee') {
-                clearLayoutInline();
-            } else {
-                el.style.display = 'grid';
-                el.style.gridTemplateColumns = '1fr 1fr';
-                el.style.height = 'calc(100vh - 73px)';
-                el.style.padding = '0';
-                el.style.gap = '0';
-            }
+            if (viewId === 'view-manager' || viewId === 'view-employee') { clearLayoutInline(); }
+            else { el.style.display = 'grid'; el.style.gridTemplateColumns = '1fr 1fr'; el.style.height = 'calc(100vh - 73px)'; el.style.padding = '0'; el.style.gap = '0'; }
         } else {
             clearLayoutInline();
-            el.style.display = 'flex';
-            el.style.flexDirection = 'column';
-            el.style.gap = '12px';
-            el.style.padding = '0 16px';
+            el.style.display = 'flex'; el.style.flexDirection = 'column'; el.style.gap = '12px'; el.style.padding = '0 16px';
         }
-
         if (viewId === 'view-auth') this.updateBiometricLoginButton();
     }
 
@@ -1095,14 +1136,13 @@ class HRApp {
         if (statusEl) { statusEl.className = 'gps-pill success'; statusEl.innerHTML = `<span class="gps-dot"></span><span>GPS Active — ${this.currentPosition.lat.toFixed(4)}, ${this.currentPosition.lng.toFixed(4)}</span>`; }
     }
 
-    // --- Manager Features ---
+    // ─── MANAGER FEATURES ────────────────────────────────────────────────────
 
     async createSite() {
         const siteName = document.getElementById('new-site-name').value.trim();
         if (!siteName) return alert("Enter a Site Name");
         if (!this.currentPosition) return alert("Waiting for GPS signal...");
         if (Math.abs(this.currentPosition.lat) < 0.0001 && Math.abs(this.currentPosition.lng) < 0.0001) return alert("⚠️ GPS Error: Location reading as (0,0). Please wait.");
-
         const newSite = { id: Date.now(), name: siteName, lat: this.currentPosition.lat, lng: this.currentPosition.lng, company_id: this.currentUser.company_id };
         try {
             await this.saveSite(newSite);
@@ -1115,11 +1155,9 @@ class HRApp {
     async updateSiteLocation(siteId) {
         if (!this.currentPosition) return alert("Waiting for GPS...");
         if (Math.abs(this.currentPosition.lat) < 0.0001 && Math.abs(this.currentPosition.lng) < 0.0001) return alert("⚠️ GPS Error: Location reading as (0,0). Please wait.");
-
         const site = this.sites[siteId];
         if (!site) return;
         if (!confirm(`Update location for "${site.name}" to your CURRENT position?\n\nNew Coords: ${this.currentPosition.lat.toFixed(6)}, ${this.currentPosition.lng.toFixed(6)}`)) return;
-
         try {
             site.lat = this.currentPosition.lat; site.lng = this.currentPosition.lng;
             await this.saveSite(site);
@@ -1136,46 +1174,26 @@ class HRApp {
         const cleaned = nextName.trim();
         if (!cleaned) return alert('Site name cannot be empty.');
         if (cleaned === site.name) return;
-
         try {
             site.name = cleaned;
             await this.saveSite(site);
             this.refreshDashboard();
             alert(`Site renamed to "${cleaned}".`);
-        } catch (error) {
-            alert('Failed to rename site: ' + error.message);
-        }
+        } catch (error) { alert('Failed to rename site: ' + error.message); }
     }
 
     async removeSite(siteId) {
         const site = this.sites[siteId];
         if (!site) return alert('Site not found.');
-
-        const assignedEmployees = Object.values(this.employees).filter(
-            (emp) => emp.company_id === this.currentUser.company_id && String(emp.assigned_site_id) === String(siteId)
-        );
+        const assignedEmployees = Object.values(this.employees).filter(emp => emp.company_id === this.currentUser.company_id && String(emp.assigned_site_id) === String(siteId));
         if (!confirm(`Delete site "${site.name}"?\n${assignedEmployees.length} employee(s) will be unassigned.`)) return;
-
         try {
             await this.deleteSite(siteId);
-
-            const updates = assignedEmployees.map(async (emp) => {
-                emp.assigned_site_id = null;
-                await this.saveEmployee(emp.username, emp);
-            });
-            await Promise.all(updates);
-
-            if (this.companies[this.currentUser.company_id]) {
-                this.companies[this.currentUser.company_id].sites = this.companies[this.currentUser.company_id].sites.filter(
-                    s => String(s.id) !== String(siteId)
-                );
-            }
-
+            await Promise.all(assignedEmployees.map(async emp => { emp.assigned_site_id = null; await this.saveEmployee(emp.username, emp); }));
+            if (this.companies[this.currentUser.company_id]) this.companies[this.currentUser.company_id].sites = this.companies[this.currentUser.company_id].sites.filter(s => String(s.id) !== String(siteId));
             this.refreshDashboard();
             alert(`Site "${site.name}" deleted. ${assignedEmployees.length} employee(s) unassigned.`);
-        } catch (error) {
-            alert('Failed to delete site: ' + error.message);
-        }
+        } catch (error) { alert('Failed to delete site: ' + error.message); }
     }
 
     async registerEmployee() {
@@ -1183,9 +1201,7 @@ class HRApp {
         const contact = document.getElementById('new-emp-contact').value.trim();
         const siteId = document.getElementById('new-emp-site').value;
         const passcode = document.getElementById('new-emp-passcode').value.trim();
-
         if (!username || !contact || !siteId) return alert("Fill all fields");
-
         try {
             let user = this.employees[username];
             if (!user) {
@@ -1204,10 +1220,7 @@ class HRApp {
                 alert(`Updated site for ${username}.`);
                 return;
             }
-
-            if (!this.companies[this.currentUser.company_id]) {
-                this.companies[this.currentUser.company_id] = { sites: [], employees: [], logs: [] };
-            }
+            if (!this.companies[this.currentUser.company_id]) this.companies[this.currentUser.company_id] = { sites: [], employees: [], logs: [] };
             if (!this.companies[this.currentUser.company_id].employees.includes(username)) this.companies[this.currentUser.company_id].employees.push(username);
             alert(`Employee ${username} linked successfully!`);
             this.refreshDashboard();
@@ -1233,27 +1246,18 @@ class HRApp {
         if (!confirm(`Reset device binding for "${username}"?\nThey will need to sign in again on a new device.`)) return;
         const employee = this.employees[username];
         if (!employee) return alert('Employee not found.');
-
         try {
-            employee.device_fingerprint = null;
-            employee.device_bound_at = null;
-            employee.biometric_enabled = false;
+            employee.device_fingerprint = null; employee.device_bound_at = null; employee.biometric_enabled = false;
             await this.saveEmployee(username, employee);
             this.refreshDashboard();
             alert(`Device binding reset for ${username}.`);
-        } catch (error) {
-            alert('Failed to reset device binding: ' + error.message);
-        }
+        } catch (error) { alert('Failed to reset device binding: ' + error.message); }
     }
 
-    // --- Employee Features ---
+    // ─── EMPLOYEE FEATURES ───────────────────────────────────────────────────
 
     async checkIn() {
-        try {
-            await this.getFreshPosition(10000);
-        } catch (err) {
-            return alert(` GPS Error: ${err.message}`);
-        }
+        try { await this.getFreshPosition(10000); } catch (err) { return alert(` GPS Error: ${err.message}`); }
         if (!this.currentUser?.company_id) return;
         await this.loadGeofenceRadiusFromSubscription(this.currentUser.company_id);
         this._lastGeofenceRadiusFetchMs = Date.now();
@@ -1261,11 +1265,9 @@ class HRApp {
         if (!user) return alert("Error: Your employee profile not found.");
         const site = Object.values(this.sites).find(s => String(s.id) === String(user.assigned_site_id) && s.company_id === user.company_id);
         if (!site) return alert("Error: Your assigned worksite was deleted or not found.");
-
         const dist = this.getDistanceFromLatLonInMeters(this.currentPosition.lat, this.currentPosition.lng, site.lat, site.lng);
         const radius = this.getEffectiveGeofenceRadius();
         if (dist > radius) return alert(`You are ${Math.round(dist)}m away from ${site.name} (must be within ${radius}m).`);
-
         try {
             const checkInTime = new Date().toISOString();
             user.status = 'checked-in'; user.check_in_time = checkInTime; user.last_ping = checkInTime;
@@ -1274,16 +1276,8 @@ class HRApp {
             if (this.trackingInterval) clearInterval(this.trackingInterval);
             this.trackingInterval = setInterval(() => {
                 navigator.geolocation.getCurrentPosition(
-                    (pos) => {
-                        this.currentPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-                        this.updateUIWithLocation();
-                        this.trackLocation(site.id);
-                        if (this.currentUser) this.monitorGeofence();
-                    },
-                    (err) => {
-                        console.error('GPS update failed:', err);
-                        if (this.currentUser) this.monitorGeofence();
-                    },
+                    (pos) => { this.currentPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude }; this.updateUIWithLocation(); this.trackLocation(site.id); if (this.currentUser) this.monitorGeofence(); },
+                    (err) => { console.error('GPS update failed:', err); if (this.currentUser) this.monitorGeofence(); },
                     { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
                 );
             }, 30000);
@@ -1329,7 +1323,6 @@ class HRApp {
         const reasonInput = document.getElementById('checkout-reason');
         const customReason = reasonInput?.value?.trim();
         const action = reason || (customReason ? `Site Exit • ${customReason}` : 'Check-Out');
-
         try {
             user.status = 'checked-out'; user.check_in_time = null; user.last_ping = new Date().toISOString();
             if (this.trackingInterval) clearInterval(this.trackingInterval);
@@ -1342,11 +1335,12 @@ class HRApp {
         } catch (error) { alert('Failed to check out: ' + error.message); }
     }
 
+    // ─── DASHBOARD ───────────────────────────────────────────────────────────
+
     refreshDashboard() {
         if (!this.currentUser) return;
 
         if (this.currentUser.role === 'manager') {
-            // Check subscription and show warning if needed
             this.checkSubscription().then(active => {
                 if (!active) {
                     this.showToast({ message: '⏰ Trial expired. Please subscribe to continue.', type: 'warning' });
@@ -1354,7 +1348,6 @@ class HRApp {
                     this.updateTrialStatus();
                     return;
                 }
-                // Show trial warning if less than 7 days
                 this.getTrialDaysRemaining().then(async daysLeft => {
                     const sub = await this.getSubscriptionStatus();
                     if (daysLeft > 0 && daysLeft <= 7) {
@@ -1366,15 +1359,14 @@ class HRApp {
                     await this.updateSubscriptionStatusCard(daysLeft);
                 });
             });
-            
+
             void this.loadGeofenceRadiusFromSubscription(this.currentUser.company_id).then(() => {
                 const inp = document.getElementById('geofence-radius');
                 if (inp) inp.value = String(this.getEffectiveGeofenceRadius());
             });
-            
+
             const company = this.getCompanyData(this.currentUser.company_id);
 
-            // 1. Sites dropdown
             const siteSelect = document.getElementById('new-emp-site');
             if (siteSelect) {
                 const currentVal = siteSelect.value;
@@ -1387,15 +1379,13 @@ class HRApp {
                 if (currentVal) siteSelect.value = currentVal;
             }
 
-            // 2. Sites list
             const siteListDiv = document.getElementById('site-list-display');
             if (siteListDiv) {
                 siteListDiv.innerHTML = company.sites?.length > 0
-                    ? company.sites.map(s => `<div class="site-item"><div> <strong>${s.name}</strong><div class="text-small text-muted" style="margin-top:4px;">${s.lat.toFixed(6)}, ${s.lng.toFixed(6)}</div></div><div style="display:flex; gap:6px; align-items:center;"><button class="btn-outline text-small" onclick="app.renameSite('${s.id}')">Rename</button><button class="btn-outline text-small" onclick="app.updateSiteLocation('${s.id}')">Update Loc</button><button class="btn-danger btn-sm" onclick="app.removeSite('${s.id}')">Delete</button></div></div>`).join('')
+                    ? company.sites.map(s => `<div class="site-item"><div><strong>${s.name}</strong><div class="text-small text-muted" style="margin-top:4px;">${s.lat.toFixed(6)}, ${s.lng.toFixed(6)}</div></div><div style="display:flex;gap:6px;align-items:center;"><button class="btn-outline text-small" onclick="app.renameSite('${s.id}')">Rename</button><button class="btn-outline text-small" onclick="app.updateSiteLocation('${s.id}')">Update Loc</button><button class="btn-danger btn-sm" onclick="app.removeSite('${s.id}')">Delete</button></div></div>`).join('')
                     : '<small>No sites configured.</small>';
             }
 
-            // 3. Team status
             const teamStatusDiv = document.getElementById('team-status-display');
             if (teamStatusDiv && company.sites) {
                 let html = '';
@@ -1413,45 +1403,27 @@ class HRApp {
                 teamStatusDiv.innerHTML = html || '<p class="text-muted text-center">No employees assigned to sites yet.</p>';
             }
 
-            // 4. Logs
             const logList = document.getElementById('employee-list');
             if (logList) {
                 if (!company.logs?.length) {
                     logList.innerHTML = '<p class="text-muted text-small">No entries yet.</p>';
                 } else {
-                    const ordered = company.logs.slice().reverse(); // oldest → newest
+                    const ordered = company.logs.slice().reverse();
                     const groups = ordered.reduce((acc, log) => {
                         const key = log.username || 'Unknown';
                         if (!acc[key]) acc[key] = [];
                         acc[key].push(log);
                         return acc;
                     }, {});
-
                     logList.innerHTML = Object.entries(groups).map(([username, logs]) => {
                         const safeId = String(username).replace(/[^a-zA-Z0-9_-]/g, '_');
-                        const userArg = String(username ?? 'Unknown')
-                            .replace(/\\/g, '\\\\')
-                            .replace(/'/g, "\\'");
+                        const userArg = String(username ?? 'Unknown').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
                         const rows = logs.map(l => `<tr><td>${l.action}</td><td>${l.time}</td></tr>`).join('');
-                        return `
-                            <div class="log-user-group">
-                                <button type="button" class="log-user-title-btn" onclick="app.toggleLogUser('${userArg}')">
-                                    <span class="log-user-title-text">${username}</span>
-                                    <span id="log-user-icon-${safeId}" class="log-user-title-icon">+</span>
-                                </button>
-                                <div id="log-user-body-${safeId}" style="display:none;">
-                                    <table class="logs-table logs-table-compact">
-                                        <tr><th>Action</th><th>Time</th></tr>
-                                        ${rows}
-                                    </table>
-                                </div>
-                            </div>
-                        `;
+                        return `<div class="log-user-group"><button type="button" class="log-user-title-btn" onclick="app.toggleLogUser('${userArg}')"><span class="log-user-title-text">${username}</span><span id="log-user-icon-${safeId}" class="log-user-title-icon">+</span></button><div id="log-user-body-${safeId}" style="display:none;"><table class="logs-table logs-table-compact"><tr><th>Action</th><th>Time</th></tr>${rows}</table></div></div>`;
                     }).join('');
                 }
             }
 
-            // 5. Team list
             const teamList = document.getElementById('team-list-container');
             if (teamList) {
                 const companyEmployees = Object.values(this.employees).filter(emp => emp.company_id === this.currentUser.company_id);
@@ -1460,23 +1432,7 @@ class HRApp {
                         const siteName = company.sites.find(s => String(s.id) === String(emp.assigned_site_id))?.name || 'Unknown Site';
                         const hasDeviceBinding = !!emp.device_fingerprint;
                         const esc = String(emp.username ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                        return `
-                        <div class="team-member-item" style="flex-direction:column; align-items:stretch; gap:8px;">
-                            <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <div style="cursor:pointer;" onclick="app.toggleEmployeeHistory('${esc}')">
-                                    <div class="team-member-name">${emp.username}</div>
-                                    <div class="text-sub">@ ${siteName} — ${hasDeviceBinding ? 'Device bound' : 'No device bound'} — tap to view history</div>
-                                </div>
-                                <div style="display:flex; gap:6px;">
-                                    <button onclick="app.clearEmployeeHistory('${esc}')" class="btn-outline btn-sm">Clear History</button>
-                                    <button onclick="app.resetEmployeeDeviceBinding('${esc}')" class="btn-outline btn-sm">Reset Device</button>
-                                    <button onclick="app.removeEmployee('${esc}')" class="btn-danger btn-sm">🗑️</button>
-                                </div>
-                            </div>
-                            <div id="history-${emp.username}" style="display:none; background:var(--surface-2); border-radius:var(--radius-sm); padding:12px; font-size:0.82rem; color:var(--text-muted);">
-                                Loading...
-                            </div>
-                        </div>`;
+                        return `<div class="team-member-item" style="flex-direction:column;align-items:stretch;gap:8px;"><div style="display:flex;justify-content:space-between;align-items:center;"><div style="cursor:pointer;" onclick="app.toggleEmployeeHistory('${esc}')"><div class="team-member-name">${emp.username}</div><div class="text-sub">@ ${siteName} — ${hasDeviceBinding ? 'Device bound' : 'No device bound'} — tap to view history</div></div><div style="display:flex;gap:6px;"><button onclick="app.clearEmployeeHistory('${esc}')" class="btn-outline btn-sm">Clear History</button><button onclick="app.resetEmployeeDeviceBinding('${esc}')" class="btn-outline btn-sm">Reset Device</button><button onclick="app.removeEmployee('${esc}')" class="btn-danger btn-sm">🗑️</button></div></div><div id="history-${emp.username}" style="display:none;background:var(--surface-2);border-radius:var(--radius-sm);padding:12px;font-size:0.82rem;color:var(--text-muted);">Loading...</div></div>`;
                     }).join('')
                     : '<p class="text-muted text-center">No employees yet.</p>';
             }
@@ -1484,39 +1440,25 @@ class HRApp {
         } else {
             const user = this.employees[this.currentUser.username] || { status: 'checked-out' };
             const isCheckedIn = user.status === 'checked-in';
-
             const btnCheckin = document.getElementById('btn-checkin');
             const btnCheckout = document.getElementById('btn-checkout');
             const empTimer = document.getElementById('emp-timer');
             if (btnCheckin) btnCheckin.style.display = isCheckedIn ? 'none' : 'block';
             if (btnCheckout) btnCheckout.style.display = isCheckedIn ? 'block' : 'none';
             if (empTimer) empTimer.style.display = isCheckedIn ? 'block' : 'none';
-
             if (!isCheckedIn) this.collapseCheckoutReason();
             if (isCheckedIn) this.startTimer(user.check_in_time);
             else if (this.timerInterval) clearInterval(this.timerInterval);
-
             const statusText = document.getElementById('emp-status-text');
             const statusIcon = document.getElementById('emp-status-icon');
             const empBox = document.getElementById('emp-status-box');
             if (statusText && statusIcon && empBox) {
                 empBox.classList.remove('checked-in', 'checked-out');
-                if (isCheckedIn) {
-                    statusText.innerText = 'Checked In';
-                    statusIcon.innerText = '✅';
-                    empBox.classList.add('checked-in');
-                } else {
-                    statusText.innerText = 'Checked Out';
-                    statusIcon.innerText = '🛑';
-                    empBox.classList.add('checked-out');
-                }
+                if (isCheckedIn) { statusText.innerText = 'Checked In'; statusIcon.innerText = '✅'; empBox.classList.add('checked-in'); }
+                else { statusText.innerText = 'Checked Out'; statusIcon.innerText = '🛑'; empBox.classList.add('checked-out'); }
             }
-
             const geoHint = document.getElementById('emp-geofence-hint');
-            if (geoHint) {
-                geoHint.innerText = `Allowed check-in radius: ${this.getEffectiveGeofenceRadius()}m from your assigned worksite center.`;
-            }
-
+            if (geoHint) geoHint.innerText = `Allowed check-in radius: ${this.getEffectiveGeofenceRadius()}m from your assigned worksite center.`;
             const biometricBtn = document.getElementById('btn-enable-biometrics');
             const biometricStatus = document.getElementById('biometric-status');
             if (biometricBtn && biometricStatus) {
@@ -1525,44 +1467,37 @@ class HRApp {
                 biometricBtn.style.display = supported ? 'block' : 'none';
                 biometricBtn.innerText = enabled ? '🔐 Disable Biometric Login' : '🔐 Enable Biometric Login';
                 biometricBtn.onclick = () => enabled ? this.disableBiometrics() : this.enableBiometrics();
-                biometricStatus.innerText = supported
-                    ? (enabled ? 'Biometric sign in enabled on this device.' : 'Optional: enable biometric sign in for faster access.')
-                    : 'Biometric sign in is not supported on this device/browser.';
+                biometricStatus.innerText = supported ? (enabled ? 'Biometric sign in enabled on this device.' : 'Optional: enable biometric sign in for faster access.') : 'Biometric sign in is not supported on this device/browser.';
             }
         }
     }
+
+    // ─── TIMER ───────────────────────────────────────────────────────────────
 
     startTimer(startTime) {
         if (this.timerInterval) clearInterval(this.timerInterval);
         const timerElem = document.getElementById('emp-timer');
         if (!timerElem) return;
-
         const startMs = (() => {
             if (startTime == null) return null;
             if (typeof startTime === 'number') return startTime;
             if (startTime instanceof Date) return startTime.getTime();
-            if (typeof startTime === 'string') {
-                const parsed = Date.parse(startTime);
-                return !isNaN(parsed) ? parsed : null;
-            }
+            if (typeof startTime === 'string') { const parsed = Date.parse(startTime); return !isNaN(parsed) ? parsed : null; }
             return null;
         })();
-        if (startMs == null) {
-            timerElem.innerText = '00:00:00';
-            timerElem.style.color = '';
-            return;
-        }
-
+        if (startMs == null) { timerElem.innerText = '00:00:00'; timerElem.style.color = ''; return; }
         this.timerInterval = setInterval(() => {
             const diff = Date.now() - startMs;
             const h = Math.floor(diff / 3600000);
             const m = Math.floor((diff % 3600000) / 60000);
             const s = Math.floor((diff % 60000) / 1000);
-            let timeStr = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+            let timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
             if (h >= 2) { timerElem.style.color = 'var(--red)'; timeStr += " (RE-CHECK REQUIRED)"; }
             timerElem.innerText = timeStr;
         }, 1000);
     }
+
+    // ─── UTILS ───────────────────────────────────────────────────────────────
 
     debugSetLocation(lat, lng) {
         this.currentPosition = { lat, lng };
@@ -1570,70 +1505,12 @@ class HRApp {
         alert(`Debug: Teleported to ${lat}, ${lng}`);
     }
 
-    showToast(input, type = 'info', duration = 4200) {
-        try {
-            const container = document.getElementById('toast-container');
-            if (!container) return;
-
-            const palette = {
-                success: { icon: '✓', title: 'Success' },
-                error: { icon: '⛔', title: 'Error' },
-                warning: { icon: '⚠️', title: 'Warning' },
-                info: { icon: 'ℹ️', title: 'Info' }
-            };
-
-            const payload = typeof input === 'string'
-                ? { message: input, type, duration }
-                : { ...(input || {}) };
-            const toastType = payload.type || type || 'info';
-            const tone = palette[toastType] || palette.info;
-            const toastTitle = payload.title || tone.title;
-            const toastMessage = payload.message || '';
-            const toastIcon = payload.icon || tone.icon;
-            const ttl = payload.duration || duration;
-
-            const node = document.createElement('div');
-            node.className = `toast ${toastType}`;
-            node.innerHTML = `
-                <div class="toast-icon">${toastIcon}</div>
-                <div class="toast-copy">
-                    <div class="toast-title">${toastTitle}</div>
-                    <div class="toast-message">${toastMessage}</div>
-                </div>
-            `;
-            container.appendChild(node);
-            setTimeout(() => {
-                try {
-                    node.classList.add('leaving');
-                    setTimeout(() => { if (node.parentNode) node.parentNode.removeChild(node); }, 260);
-                } catch (e) {}
-            }, ttl);
-        } catch (err) { console.warn('Toast failed', err); }
-    }
-
-    showToastFromLegacyAlert(rawMessage) {
-        const text = String(rawMessage || '').replace(/\n+/g, '\n').trim();
-        const upper = text.toUpperCase();
-        let type = 'info';
-        if (upper.includes('FAILED') || upper.includes('ERROR') || upper.includes('DENIED') || upper.includes('INVALID')) type = 'error';
-        else if (upper.includes('WARNING') || upper.includes('ALERT') || upper.includes('REQUIRED')) type = 'warning';
-        else if (upper.includes('SUCCESS') || upper.includes('CREATED') || upper.includes('LINKED')) type = 'success';
-
-        const parts = text.split('\n').filter(Boolean);
-        const first = parts[0] || 'Notification';
-        const body = parts.length > 1 ? parts.slice(1).join(' ') : first;
-        const cleanTitle = first.replace(/^[^\w]+/, '').trim() || 'Notification';
-        this.showToast({ title: cleanTitle, message: body, type });
-    }
-
-    // --- Utils ---
-
     getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
         const R = 6371;
         const dLat = this.deg2rad(lat2 - lat1);
         const dLon = this.deg2rad(lon2 - lon1);
-        const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(this.deg2rad(lat1)) * Math.cos(this.deg2rad(lat2)) * Math.sin(dLon/2) * Math.sin(dLon/2);
-        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)) * 1000;
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(this.deg2rad(lat1)) * Math.cos(this.deg2rad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 1000;
     }
 
     deg2rad(deg) { return deg * (Math.PI / 180); }
@@ -1655,220 +1532,65 @@ class HRApp {
         body.style.display = nextOpen ? 'block' : 'none';
         icon.textContent = nextOpen ? '−' : '+';
     }
-// --- Payment ---
 
-    loadPaystackScript() {
-        return new Promise((resolve, reject) => {
-            if (typeof PaystackPop !== 'undefined') {
-                resolve();
-                return;
-            }
-            const existing = document.querySelector('script[src*="js.paystack.co"]');
-            if (existing) {
-                if (typeof PaystackPop !== 'undefined') {
-                    resolve();
-                    return;
-                }
-                existing.addEventListener('load', () => resolve());
-                existing.addEventListener('error', () => reject(new Error('Paystack script failed')));
-                return;
-            }
-            const s = document.createElement('script');
-            s.src = 'https://js.paystack.co/v1/inline.js';
-            s.defer = true;
-            s.onload = () => resolve();
-            s.onerror = () => reject(new Error('Paystack script failed'));
-            document.head.appendChild(s);
-        });
-    }
-
-    initiatePayment(planName, amount, maxEmployees) {
-        if (!this.currentUser) return;
-        const manager = this.managers[this.currentUser.username];
-        const email = manager?.email || '';
-        if (!email) return alert('Manager email not found. Please contact support.');
-
-        const openPaystack = () => {
-            if (typeof PaystackPop === 'undefined') {
-                return alert('Payment script is still loading. Wait a moment and tap Subscribe again.');
-            }
-            const handler = PaystackPop.setup({
-                key: 'pk_test_554291712d47569a3381b5b6c48cc64d03053dd5',
-                email,
-                amount,
-                currency: 'GHS',
-                ref: `WW-${this.currentUser.company_id}-${Date.now()}`,
-                metadata: { company_id: this.currentUser.company_id, plan: planName, max_employees: maxEmployees },
-                callback: (response) => { this.onPaymentSuccess(response, planName, maxEmployees); },
-                onClose: () => { this.showToast({ message: 'Payment cancelled', type: 'warning' }); }
-            });
-            handler.openIframe();
-        };
-
-        this.loadPaystackScript().then(openPaystack).catch(() => alert('Could not load the payment provider. Check your connection and try again.'));
-    }
-
-    async onPaymentSuccess(response, planName, maxEmployees) {
-        try {
-            const subscriptionEndDate = new Date();
-            subscriptionEndDate.setDate(subscriptionEndDate.getDate() + 30);
-            const base = {
-                company_id: this.currentUser.company_id,
-                subscription_plan: planName, subscription_status: 'active',
-                trial_end: subscriptionEndDate.toISOString(),
-                employee_count: maxEmployees,
-                paystack_ref: response.reference
-            };
-            const withRadius = { ...base, geofence_radius_m: this.getEffectiveGeofenceRadius() };
-            let { error } = await supabase.from('subscriptions').upsert(withRadius, { onConflict: 'company_id' });
-            if (error && String(error.message || '').toLowerCase().includes('geofence_radius_m')) {
-                ({ error } = await supabase.from('subscriptions').upsert(base, { onConflict: 'company_id' }));
-            }
-            if (error) throw error;
-            this.showToast({ message: `${planName} plan activated! Valid until ${subscriptionEndDate.toLocaleDateString()}`, type: 'success' });
-            this.showView('view-manager');
-            this.refreshDashboard();
-        } catch (error) {
-            alert('Payment recorded but failed to update subscription: ' + error.message);
-        }
-    }
-
-    isSubscriptionPeriodActive(data) {
-        if (!data?.trial_end) return false;
-        const end = new Date(data.trial_end);
-        if (Number.isNaN(end.getTime()) || new Date() >= end) return false;
-       return data.subscription_status === 'trial' || data.subscription_status === 'active';
-    }
-
-    async checkSubscription() {
-        if (!this.currentUser || this.currentUser.role !== 'manager') return false;
-        try {
-            const { data, error } = await supabase.from('subscriptions').select('*').eq('company_id', this.currentUser.company_id).maybeSingle();
-            if (error) return false;
-            if (!data) return false;
-            return this.isSubscriptionPeriodActive(data);
-        } catch {
-            return false;
-        }
-    }
-
-    async getTrialDaysRemaining() {
-        try {
-            const { data, error } = await supabase.from('subscriptions').select('trial_end').eq('company_id', this.currentUser.company_id).maybeSingle();
-            if (error || !data?.trial_end) return 0;
-            const trialEnd = new Date(data.trial_end);
-            const today = new Date();
-            const daysLeft = Math.ceil((trialEnd - today) / (1000 * 60 * 60 * 24));
-            return Math.max(0, daysLeft);
-        } catch { return 0; }
-    }
-
-isSubscriptionPeriodActive(data) {
-    if (!data?.trial_end) return false;
-    const end = new Date(data.trial_end);
-    if (Number.isNaN(end.getTime()) || new Date() >= end) return false;
-    return data.subscription_status === 'trial' || data.subscription_status === 'active';
-}
-
-async getSubscriptionStatus() {
-    try {
-        const { data, error } = await supabase.from('subscriptions').select('*').eq('company_id', this.currentUser.company_id).maybeSingle();
-        if (error || !data) return { status: 'none', daysLeft: 0, plan: 'free' };
-        if (!data.trial_end) return { 
-            status: data.subscription_status || 'none', 
-            daysLeft: 0, 
-            plan: data.subscription_plan || 'trial', 
-            employees: data.employee_count || 5 
-        };
-        const end = new Date(data.trial_end);
-        if (Number.isNaN(end.getTime())) return { 
-            status: data.subscription_status || 'none', 
-            daysLeft: 0, 
-            plan: data.subscription_plan || 'trial', 
-            employees: data.employee_count || 5 
-        };
-        const daysLeft = Math.ceil((end - new Date()) / (1000 * 60 * 60 * 24));
-        return { 
-            status: data.subscription_status, 
-            daysLeft: Math.max(0, daysLeft), 
-            plan: data.subscription_plan || 'trial', 
-            employees: data.employee_count || 5 
-        };
-    } catch { return { status: 'none', daysLeft: 0, plan: 'free' }; }
-}
-    async updateSubscriptionStatusCard(daysLeft) {
-        const card = document.getElementById('subscription-status-card');
-        const badge = document.getElementById('plan-badge');
-        const info = document.getElementById('trial-info');
-
-        if (!card || !badge) return;
-
-        card.style.display = 'block';
-
-        const sub = await this.getSubscriptionStatus();
-
-        if (sub.status === 'active') {
-            badge.innerText = '✓ Subscribed';
-            badge.style.color = 'var(--green)';
-            if (info) {
-                info.innerText = daysLeft <= 0
-                    ? `Plan: ${sub.plan}. Renew to keep full access.`
-                    : `Plan: ${sub.plan}. Renews in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}.`;
-            }
-            return;
-        }
-
-        if (daysLeft <= 0) {
-            badge.innerText = '⏰ Trial Expired';
-            badge.style.color = 'var(--red)';
-            if (info) info.innerText = 'Your free trial has ended. Please upgrade to continue.';
-        } else if (daysLeft <= 7) {
-            badge.innerText = `⚠️ ${daysLeft} Day${daysLeft !== 1 ? 's' : ''} Left`;
-            badge.style.color = 'var(--amber)';
-            if (info) info.innerText = `Your free trial expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}.`;
-        } else {
-            badge.innerText = `✓ ${daysLeft} Days Left`;
-            badge.style.color = 'var(--green)';
-            if (info) info.innerText = `Enjoy your free trial! You have ${daysLeft} days remaining.`;
-        }
-    }
     toggleEmployeeHistory(username) {
         const el = document.getElementById(`history-${username}`);
         if (!el) return;
         if (el.style.display === 'none') {
             el.style.display = 'block';
             const user = this.employees[username];
-            if (!user || !user.history || user.history.length === 0) {
-                el.innerHTML = '<p style="color:var(--text-muted);">No location history yet.</p>';
-                return;
-            }
-            el.innerHTML = user.history.slice().reverse().slice(0, 10).map(pt => `
-                <div style="padding:6px 0; border-bottom:1px solid var(--border); display:flex; justify-content:space-between;">
-                    <span>${pt.time}</span>
-                    <span style="font-family:monospace;">${pt.lat.toFixed(5)}, ${pt.lng.toFixed(5)}</span>
-                </div>
-            `).join('');
-        } else {
-            el.style.display = 'none';
-        }
+            if (!user || !user.history || user.history.length === 0) { el.innerHTML = '<p style="color:var(--text-muted);">No location history yet.</p>'; return; }
+            el.innerHTML = user.history.slice().reverse().slice(0, 10).map(pt => `<div style="padding:6px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;"><span>${pt.time}</span><span style="font-family:monospace;">${pt.lat.toFixed(5)}, ${pt.lng.toFixed(5)}</span></div>`).join('');
+        } else { el.style.display = 'none'; }
     }
 
     clearEmployeeHistory(username) {
         if (!this.currentUser || this.currentUser.role !== 'manager') return;
         if (!username) return;
-        if (!confirm(`Clear location history for "${username}"? This removes the on-device tracking history shown in the dashboard.`)) return;
+        if (!confirm(`Clear location history for "${username}"?`)) return;
         const user = this.employees[username];
         if (user) user.history = [];
         const el = document.getElementById(`history-${username}`);
-        if (el) {
-            el.style.display = 'none';
-            el.innerHTML = '<p style="color:var(--text-muted);">No location history yet.</p>';
-        }
+        if (el) { el.style.display = 'none'; el.innerHTML = '<p style="color:var(--text-muted);">No location history yet.</p>'; }
         this.showToast({ message: `History cleared for ${username}.`, type: 'success' });
+    }
+
+    // ─── TOAST ───────────────────────────────────────────────────────────────
+
+    showToast(input, type = 'info', duration = 4200) {
+        try {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+            const palette = { success: { icon: '✓', title: 'Success' }, error: { icon: '⛔', title: 'Error' }, warning: { icon: '⚠️', title: 'Warning' }, info: { icon: 'ℹ️', title: 'Info' } };
+            const payload = typeof input === 'string' ? { message: input, type, duration } : { ...(input || {}) };
+            const toastType = payload.type || type || 'info';
+            const tone = palette[toastType] || palette.info;
+            const node = document.createElement('div');
+            node.className = `toast ${toastType}`;
+            node.innerHTML = `<div class="toast-icon">${payload.icon || tone.icon}</div><div class="toast-copy"><div class="toast-title">${payload.title || tone.title}</div><div class="toast-message">${payload.message || ''}</div></div>`;
+            container.appendChild(node);
+            setTimeout(() => {
+                try { node.classList.add('leaving'); setTimeout(() => { if (node.parentNode) node.parentNode.removeChild(node); }, 260); } catch (e) {}
+            }, payload.duration || duration);
+        } catch (err) { console.warn('Toast failed', err); }
+    }
+
+    showToastFromLegacyAlert(rawMessage) {
+        const text = String(rawMessage || '').replace(/\n+/g, '\n').trim();
+        const upper = text.toUpperCase();
+        let type = 'info';
+        if (upper.includes('FAILED') || upper.includes('ERROR') || upper.includes('DENIED') || upper.includes('INVALID')) type = 'error';
+        else if (upper.includes('WARNING') || upper.includes('ALERT') || upper.includes('REQUIRED')) type = 'warning';
+        else if (upper.includes('SUCCESS') || upper.includes('CREATED') || upper.includes('LINKED')) type = 'success';
+        const parts = text.split('\n').filter(Boolean);
+        const first = parts[0] || 'Notification';
+        const body = parts.length > 1 ? parts.slice(1).join(' ') : first;
+        this.showToast({ title: first.replace(/^[^\w]+/, '').trim() || 'Notification', message: body, type });
     }
 }
 
-// Initialize
+// ─── INITIALIZE ──────────────────────────────────────────────────────────────
+
 try {
     const app = new HRApp();
     window.app = app;

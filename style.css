@@ -1441,3 +1441,42 @@ select option { background: var(--surface-2); }
         padding: 20px 28px;
     }
 }
+/* ═══════════════════════════════════════
+   MOBILE FIXES
+═══════════════════════════════════════ */
+@media (max-width: 767px) {
+
+    /* Fix hero text overflowing into status bar */
+    .auth-hero {
+        padding-top: env(safe-area-inset-top, 12px);
+    }
+
+    .auth-hero-title {
+        font-size: clamp(1.8rem, 9vw, 2.8rem);
+    }
+
+    /* Fix auth-hero features showing as centered text */
+    .auth-hero-features {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        text-align: left;
+        margin-top: 16px;
+    }
+
+    .auth-feature {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--text-mid);
+        font-size: 0.85rem;
+    }
+
+    .auth-feature-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--green);
+        flex-shrink: 0;
+    }
+}

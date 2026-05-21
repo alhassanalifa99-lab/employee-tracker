@@ -1446,27 +1446,63 @@ select option { background: var(--surface-2); }
 ═══════════════════════════════════════ */
 @media (max-width: 767px) {
 
+    .app-container {
+        max-width: 100%;
+        padding: 0 0 120px;
+        width: 100vw;
+        overflow-x: hidden;
+    }
+
+    .view {
+        padding: 0 16px;
+        max-width: 100%;
+        gap: 12px;
+    }
+
+    .view.active {
+        display: flex;
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .card {
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+
     /* Fix hero text overflowing into status bar */
     .auth-hero {
-        padding-top: env(safe-area-inset-top, 12px);
-        padding-bottom: 0;
-        margin-bottom: 16px;
+        padding: env(safe-area-inset-top, 8px) 0 12px;
+        text-align: center;
+        width: 100%;
+        overflow: hidden;
     }
 
     .auth-hero-title {
-        font-size: clamp(1.6rem, 8vw, 2.4rem);
-        line-height: 1.15;
-        margin-bottom: 4px;
+        font-family: 'Syne', sans-serif;
+        font-size: clamp(1.5rem, 7.5vw, 2.2rem);
+        font-weight: 800;
+        line-height: 1.2;
+        letter-spacing: -0.5px;
+        color: var(--text);
+        margin-bottom: 6px;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
     }
 
     .auth-hero-title em {
         font-style: normal;
         color: var(--green);
+        display: inline;
     }
 
     .auth-hero-sub {
-        font-size: 0.85rem;
-        margin-bottom: 16px;
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        font-weight: 300;
+        margin-bottom: 12px;
+        line-height: 1.3;
     }
 
     /* Fix auth-hero features showing as centered text */
@@ -1500,18 +1536,29 @@ select option { background: var(--surface-2); }
     #view-verify.active {
         display: flex !important;
         flex-direction: column;
-        padding: 0 16px 80px;
-        gap: 0;
+        grid-template-columns: unset;
+        grid-template-rows: unset;
+        padding: 0 16px 90px;
+        gap: 12px;
         height: auto;
         overflow: visible;
+        width: 100%;
+        max-width: 100%;
+        align-items: stretch;
+        justify-content: flex-start;
+        margin-top: 16px;
     }
 
     #view-register .card,
     #view-register-emp .card,
     #view-verify .card {
+        grid-column: unset;
+        grid-row: unset;
         border-radius: var(--radius);
         border: 1px solid var(--border);
         padding: 24px;
+        margin: 0;
+        overflow: visible;
         overflow-y: visible;
         display: flex;
         flex-direction: column;
@@ -1519,20 +1566,40 @@ select option { background: var(--surface-2); }
         background: var(--surface);
         width: 100%;
         max-width: 100%;
+        box-sizing: border-box;
+        position: static;
     }
 
     #view-register::before,
     #view-register-emp::before,
     #view-verify::before {
         display: none !important;
+        grid-column: unset;
     }
 
     #view-verify .card {
         text-align: center;
     }
 
-    #view-verify .btn {
-        margin-top: 10px;
-        font-size: 0.9rem;
+    #view-verify .btn,
+    #view-register .btn,
+    #view-register-emp .btn {
+        width: 100%;
+        margin-top: 8px;
+        position: static;
+        float: none;
+    }
+
+    #view-verify .btn:first-of-type,
+    #view-register .btn:first-of-type,
+    #view-register-emp .btn:first-of-type {
+        margin-top: 16px;
+    }
+
+    /* Reset h2 styling in cards */
+    #view-register .card h2,
+    #view-register-emp .card h2,
+    #view-verify .card h2 {
+        margin-bottom: 16px;
     }
 }

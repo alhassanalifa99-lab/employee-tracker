@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#00e87a">
     <meta name="description" content="WorkWatch — workforce tracking and management. Geofenced check-ins, live team visibility, and multi-site tools.">
     <title>WorkWatch</title>
@@ -98,6 +98,7 @@
             </div>
             <button class="btn btn-primary" onclick="app.verifyAccount()">Verify & Continue</button>
             <button class="btn btn-outline" style="margin-top:10px;" onclick="app.showView('view-auth')">Cancel</button>
+            <button class="btn btn-outline" style="margin-top:8px; font-size:0.85rem;" onclick="app.resendOtp()">Resend Code</button>
         </div>
     </div>
 
@@ -179,7 +180,7 @@
                     <li>✓ Real-time dashboard</li>
                     <li>✓ Multi-site management</li>
                 </ul>
-                <button type="button" class="btn btn-primary" onclick="if(window.app) app.initiatePayment('Starter', 15000000, 10)">Subscribe</button>
+                <button type="button" class="btn btn-primary" onclick="if(window.app) app.initiatePayment('Starter', 15000, 10)">Subscribe</button>
             </div>
 
             <div class="pricing-card">
@@ -192,7 +193,7 @@
                     <li>✓ Real-time dashboard</li>
                     <li>✓ Activity logs</li>
                 </ul>
-                <button type="button" class="btn btn-primary" onclick="if(window.app) app.initiatePayment('Basic', 20000000, 20)">Subscribe</button>
+                <button type="button" class="btn btn-primary" onclick="if(window.app) app.initiatePayment('Basic', 20000, 20)">Subscribe</button>
             </div>
 
             <div class="pricing-card">
@@ -206,7 +207,7 @@
                     <li>✓ Real-time dashboard</li>
                     <li>✓ Priority support</li>
                 </ul>
-                <button type="button" class="btn btn-primary" onclick="if(window.app) app.initiatePayment('Growth', 30000000, 50)">Subscribe</button>
+                <button type="button" class="btn btn-primary" onclick="if(window.app) app.initiatePayment('Growth', 30000, 50)">Subscribe</button>
             </div>
 
             <div class="pricing-card">
@@ -219,7 +220,7 @@
                     <li>✓ Advanced analytics</li>
                     <li>✓ API access</li>
                 </ul>
-                <button type="button" class="btn btn-primary" onclick="if(window.app) app.initiatePayment('Pro', 40000000, 100)">Subscribe</button>
+                <button type="button" class="btn btn-primary" onclick="if(window.app) app.initiatePayment('Pro', 40000, 100)">Subscribe</button>
             </div>
 
             <div class="pricing-card">
@@ -232,7 +233,7 @@
                     <li>✓ Full API access</li>
                     <li>✓ Dedicated support</li>
                 </ul>
-                <button type="button" class="btn btn-primary" onclick="if(window.app) app.initiatePayment('Enterprise', 50000000, 999)">Subscribe</button>
+                <button type="button" class="btn btn-primary" onclick="if(window.app) app.initiatePayment('Enterprise', 50000, 999)">Subscribe</button>
             </div>
         </div>
 
@@ -252,7 +253,6 @@
         </div>
 
         <div class="pricing-container" style="margin: 0 auto; max-width: 100%;">
-            <!-- 1-5 Employees -->
             <div class="pricing-card">
                 <h3 class="plan-name">👥 1-5 Employees</h3>
                 <div class="plan-price"><span>GH₵</span>150<span class="period">/month</span></div>
@@ -265,7 +265,6 @@
                 <button class="btn btn-primary" onclick="app.selectPlanAndContinue(5, '1-5 Employees')">Select Plan</button>
             </div>
 
-            <!-- 5-10 Employees -->
             <div class="pricing-card">
                 <h3 class="plan-name">👥 5-10 Employees</h3>
                 <div class="plan-price"><span>GH₵</span>200<span class="period">/month</span></div>
@@ -278,7 +277,6 @@
                 <button class="btn btn-primary" onclick="app.selectPlanAndContinue(10, '5-10 Employees')">Select Plan</button>
             </div>
 
-            <!-- 10-20 Employees -->
             <div class="pricing-card">
                 <div class="pricing-badge popular">Popular</div>
                 <h3 class="plan-name">👥 10-20 Employees</h3>
@@ -292,7 +290,6 @@
                 <button class="btn btn-primary" onclick="app.selectPlanAndContinue(20, '10-20 Employees')">Select Plan</button>
             </div>
 
-            <!-- 20-50 Employees -->
             <div class="pricing-card">
                 <h3 class="plan-name">👥 20-50 Employees</h3>
                 <div class="plan-price"><span>GH₵</span>400<span class="period">/month</span></div>
@@ -322,7 +319,6 @@
         </div>
 
         <div class="pricing-container">
-            <!-- Free Trial Plan -->
             <div class="pricing-card current">
                 <div class="pricing-badge">Starting Plan</div>
                 <h3 class="plan-name">🎁 Free Trial</h3>
@@ -338,7 +334,6 @@
                 <button class="btn btn-primary" onclick="app.showView('view-manager'); app.refreshDashboard();">Get Started</button>
             </div>
 
-            <!-- 10-20 Employees Plan (Most Popular for new users) -->
             <div class="pricing-card">
                 <div class="pricing-badge popular">Popular Upgrade</div>
                 <h3 class="plan-name">👥 10-20 Employees</h3>
@@ -363,7 +358,6 @@
     <!-- ── MANAGER DASHBOARD ── -->
     <div id="view-manager" class="view view-manager">
 
-        <!-- Subscription Status -->
         <div id="subscription-status-card" style="display:none;">
             <p class="section-label">Subscription</p>
             <div class="card">
@@ -513,7 +507,7 @@
     </div>
 
 </div>
-<button onclick="app.resendOtp()">Resend Code</button>
+
 <script type="module" src="supabase.js"></script>
 <script type="module" src="script.js"></script>
 </body>

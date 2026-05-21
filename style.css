@@ -1449,10 +1449,24 @@ select option { background: var(--surface-2); }
     /* Fix hero text overflowing into status bar */
     .auth-hero {
         padding-top: env(safe-area-inset-top, 12px);
+        padding-bottom: 0;
+        margin-bottom: 16px;
     }
 
     .auth-hero-title {
-        font-size: clamp(1.8rem, 9vw, 2.8rem);
+        font-size: clamp(1.6rem, 8vw, 2.4rem);
+        line-height: 1.15;
+        margin-bottom: 4px;
+    }
+
+    .auth-hero-title em {
+        font-style: normal;
+        color: var(--green);
+    }
+
+    .auth-hero-sub {
+        font-size: 0.85rem;
+        margin-bottom: 16px;
     }
 
     /* Fix auth-hero features showing as centered text */
@@ -1478,5 +1492,47 @@ select option { background: var(--surface-2); }
         border-radius: 50%;
         background: var(--green);
         flex-shrink: 0;
+    }
+
+    /* Fix Resend Code button and other verify view buttons on mobile */
+    #view-register.active,
+    #view-register-emp.active,
+    #view-verify.active {
+        display: flex !important;
+        flex-direction: column;
+        padding: 0 16px 80px;
+        gap: 0;
+        height: auto;
+        overflow: visible;
+    }
+
+    #view-register .card,
+    #view-register-emp .card,
+    #view-verify .card {
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        padding: 24px;
+        overflow-y: visible;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        background: var(--surface);
+        width: 100%;
+        max-width: 100%;
+    }
+
+    #view-register::before,
+    #view-register-emp::before,
+    #view-verify::before {
+        display: none !important;
+    }
+
+    #view-verify .card {
+        text-align: center;
+    }
+
+    #view-verify .btn {
+        margin-top: 10px;
+        font-size: 0.9rem;
     }
 }

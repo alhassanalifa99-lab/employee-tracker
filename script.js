@@ -529,39 +529,41 @@ class HRApp {
 
     // ─── REALTIME ────────────────────────────────────────────────────────────
 
-    setupRealtimeSubscriptions() {
-        try {
-            if (!this.currentUser?.company_id) return;
-            const companyId = this.currentUser.company_id;
+  setupRealtimeSubscriptions() {
+    try {
+        if (!this.currentUser?.company_id) return;
+        const companyId = this.currentUser.company_id;
 
-            const employeesChannel = supabase.channel('employees_changes')
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'employees', filter: `company_id=eq.${companyId}` }, (payload) => {
-                    const newData = payload.new;
-                    if (newData?.username) {
-                        this.employees[newData.username] = newData;
-                        if (this.currentUser?.username === newData.username) {
-                            this.currentUser = { ...this.currentUser, ...newData };
-                            localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
-                        }
-                        if (this.currentUser?.role === 'manager') this.refreshDashboard();
+        const employeesChannel = supabase.channel('employees_changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'employees', filter: `company_id=eq.${companyId}` }, (payload) => {
+                const newData = payload.new;
+                if (newData?.username) {
+                    this.employees[newData.username] = newData;
+                    if (this.currentUser?.username === newData.username) {
+                        this.currentUser = { ...this.currentUser, ...newData };
+                        localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
                     }
-                }).subscribe();
-            this.subscriptions.employees = employeesChannel;
+                    if (this.currentUser?.role === 'manager') {
+                        this.loadAllData().then(() => this.refreshDashboard());
+                    }
+                }
+            }).subscribe();
+        this.subscriptions.employees = employeesChannel;
 
-            const checkinsChannel = supabase.channel('checkins_changes')
-                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'checkins', filter: `company_id=eq.${companyId}` }, (payload) => {
-                    const newCheckin = payload.new;
-                    if (newCheckin?.company_id) {
-                        if (!this.logs[newCheckin.company_id]) this.logs[newCheckin.company_id] = [];
-                        this.logs[newCheckin.company_id].unshift(newCheckin);
-                        if (this.currentUser?.role === 'manager') this.refreshDashboard();
-                    }
-                }).subscribe();
-            this.subscriptions.checkins = checkinsChannel;
-        } catch (error) {
-            console.error('Error setting up real-time subscriptions:', error);
-        }
+        const checkinsChannel = supabase.channel('checkins_changes')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'checkins', filter: `company_id=eq.${companyId}` }, (payload) => {
+                const newCheckin = payload.new;
+                if (newCheckin?.company_id) {
+                    if (!this.logs[newCheckin.company_id]) this.logs[newCheckin.company_id] = [];
+                    this.logs[newCheckin.company_id].unshift(newCheckin);
+                    if (this.currentUser?.role === 'manager') this.refreshDashboard();
+                }
+            }).subscribe();
+        this.subscriptions.checkins = checkinsChannel;
+    } catch (error) {
+        console.error('Error setting up real-time subscriptions:', error);
     }
+}
 
     // ─── AUTH STATE ──────────────────────────────────────────────────────────
 
@@ -1416,8 +1418,15 @@ class HRApp {
                         html += `</div>`;
                     }
                 });
-                teamStatusDiv.innerHTML = html || '<p class="text-muted text-center">No employees assigned to sites yet.</p>';
-            }
+               teamStatusDiv.innerHTML = html || '<p class="text-muted text-center">No employees assigned to sites yet.</p>';
+
+// Auto-open the panel when there's data
+if (html) {
+    const teamBody = document.getElementById('team-body');
+    const teamIcon = document.getElementById('team-icon');
+    if (teamBody) teamBody.style.display = 'block';
+    if (teamIcon) teamIcon.textContent = '-';
+}
 
             const logList = document.getElementById('employee-list');
             if (logList) {

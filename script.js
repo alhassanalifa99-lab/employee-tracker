@@ -722,34 +722,42 @@ class HRApp {
 
     setupLocationWatcher() { this.watchLocation(); }
 
-    async getFreshPosition(timeout = 10000) {
-        return new Promise((resolve, reject) => {
-            if (!navigator.geolocation) { reject(new Error('Geolocation is not supported by your browser.')); return; }
-            navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                    const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-                    this.currentPosition = coords;
-                    this.updateUIWithLocation();
-                    resolve(coords);
-                },
-                (err) => reject(new Error(err.message || 'Unable to get location')),
-                { enableHighAccuracy: true, timeout, maximumAge: 0 }
-            );
-        });
-    }
-
-    startGeofenceWatchdog() {
-        if (this.geofenceInterval) clearInterval(this.geofenceInterval);
-        this.geofenceInterval = setInterval(async () => {
-            if (!this.currentUser || this.currentUser.role !== 'employee') return;
-            try { await this.getFreshPosition(8000); } catch (err) { console.warn('Geofence watchdog GPS refresh failed:', err?.message || err); }
-            await this.monitorGeofence();
-        }, 15000);
-    }
+ async getFreshPosition(timeout = 10000) {
+    return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+            reject(new Error('Geolocation is not supported by your browser.'));
+            return;
+        }
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                this.currentPosition = coords;
+                this.updateUIWithLocation();
+                resolve(coords);
+            },
+            (err) => {
+                if (this.currentPosition) {
+                    resolve(this.currentPosition);
+                    return;
+                }
+                reject(new Error(err.message || 'Unable to get location'));
+            },
+            { enableHighAccuracy: true, timeout, maximumAge: 30000 }
+        );
+    });
+}
 
     stopGeofenceWatchdog() {
         if (this.geofenceInterval) { clearInterval(this.geofenceInterval); this.geofenceInterval = null; }
     }
+    startGeofenceWatchdog() {
+    if (this.geofenceInterval) clearInterval(this.geofenceInterval);
+    this.geofenceInterval = setInterval(async () => {
+        if (!this.currentUser || this.currentUser.role !== 'employee') return;
+        try { await this.getFreshPosition(8000); } catch (err) { console.warn('Geofence watchdog GPS refresh failed:', err?.message || err); }
+        await this.monitorGeofence();
+    }, 15000);
+}
 
     watchLocation() {
         if (!window.isSecureContext && window.location.hostname !== 'localhost') {
@@ -1257,36 +1265,44 @@ class HRApp {
     // ─── EMPLOYEE FEATURES ───────────────────────────────────────────────────
 
     async checkIn() {
-        try { await this.getFreshPosition(10000); } catch (err) { return alert(` GPS Error: ${err.message}`); }
-        if (!this.currentUser?.company_id) return;
-        await this.loadGeofenceRadiusFromSubscription(this.currentUser.company_id);
-        this._lastGeofenceRadiusFetchMs = Date.now();
-        const user = this.employees[this.currentUser.username];
-        if (!user) return alert("Error: Your employee profile not found.");
-        const site = Object.values(this.sites).find(s => String(s.id) === String(user.assigned_site_id) && s.company_id === user.company_id);
-        if (!site) return alert("Error: Your assigned worksite was deleted or not found.");
-        const dist = this.getDistanceFromLatLonInMeters(this.currentPosition.lat, this.currentPosition.lng, site.lat, site.lng);
-        const radius = this.getEffectiveGeofenceRadius();
-        if (dist > radius) return alert(`You are ${Math.round(dist)}m away from ${site.name} (must be within ${radius}m).`);
+    // Use cached position if available, only fetch fresh if we don't have one
+    if (!this.currentPosition) {
         try {
-            const checkInTime = new Date().toISOString();
-            user.status = 'checked-in'; user.check_in_time = checkInTime; user.last_ping = checkInTime;
-            await this.saveEmployee(this.currentUser.username, user);
-            this.trackLocation(site.id);
-            if (this.trackingInterval) clearInterval(this.trackingInterval);
-            this.trackingInterval = setInterval(() => {
-                navigator.geolocation.getCurrentPosition(
-                    (pos) => { this.currentPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude }; this.updateUIWithLocation(); this.trackLocation(site.id); if (this.currentUser) this.monitorGeofence(); },
-                    (err) => { console.error('GPS update failed:', err); if (this.currentUser) this.monitorGeofence(); },
-                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-                );
-            }, 30000);
-            this.startGeofenceWatchdog();
-            await this.saveCheckin({ username: this.currentUser.username, company_id: this.currentUser.company_id, action: `Check-In @ ${site.name}`, time: new Date().toLocaleTimeString(), site_id: site.id });
-            this.refreshDashboard();
-        } catch (error) { alert('Failed to check in: ' + error.message); }
+            await this.getFreshPosition(10000);
+        } catch (err) {
+            return alert(` GPS Error: ${err.message}\n\nPlease allow GPS access and try again.`);
+        }
+    } else {
+        this.getFreshPosition(5000).catch(() => {});
     }
-
+    if (!this.currentUser?.company_id) return;
+    await this.loadGeofenceRadiusFromSubscription(this.currentUser.company_id);
+    this._lastGeofenceRadiusFetchMs = Date.now();
+    const user = this.employees[this.currentUser.username];
+    if (!user) return alert("Error: Your employee profile not found.");
+    const site = Object.values(this.sites).find(s => String(s.id) === String(user.assigned_site_id) && s.company_id === user.company_id);
+    if (!site) return alert("Error: Your assigned worksite was deleted or not found.");
+    const dist = this.getDistanceFromLatLonInMeters(this.currentPosition.lat, this.currentPosition.lng, site.lat, site.lng);
+    const radius = this.getEffectiveGeofenceRadius();
+    if (dist > radius) return alert(`You are ${Math.round(dist)}m away from ${site.name} (must be within ${radius}m).`);
+    try {
+        const checkInTime = new Date().toISOString();
+        user.status = 'checked-in'; user.check_in_time = checkInTime; user.last_ping = checkInTime;
+        await this.saveEmployee(this.currentUser.username, user);
+        this.trackLocation(site.id);
+        if (this.trackingInterval) clearInterval(this.trackingInterval);
+        this.trackingInterval = setInterval(() => {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => { this.currentPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude }; this.updateUIWithLocation(); this.trackLocation(site.id); if (this.currentUser) this.monitorGeofence(); },
+                (err) => { console.error('GPS update failed:', err); if (this.currentUser) this.monitorGeofence(); },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+            );
+        }, 30000);
+        this.startGeofenceWatchdog();
+        await this.saveCheckin({ username: this.currentUser.username, company_id: this.currentUser.company_id, action: `Check-In @ ${site.name}`, time: new Date().toLocaleTimeString(), site_id: site.id });
+        this.refreshDashboard();
+    } catch (error) { alert('Failed to check in: ' + error.message); }
+}
     async trackLocation(siteId) {
         if (!this.currentPosition || !this.currentUser) return;
         const user = this.employees[this.currentUser.username];

@@ -832,3 +832,5 @@ class HRApp {
         }
     }
 }
+
+window.app = new HRApp();

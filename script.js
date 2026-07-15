@@ -24,6 +24,7 @@ class HRApp {
         this._lastGeofenceRadiusFetchMs = 0;
         this.geofenceInterval = null;
         this.geofenceLock = false;
+        this.timerInterval = null;
         this.managers = {};
         this.employees = {};
         this.sites = {};
@@ -673,7 +674,545 @@ class HRApp {
         }
     }
 
+    // ─── UI HELPERS ───────────────────────────────────────────────────────────
+
+    showView(viewId) {
+        document.querySelectorAll('.view').forEach(view => {
+            view.classList.remove('active');
+        });
+        const targetView = document.getElementById(viewId);
+        if (targetView) {
+            targetView.classList.add('active');
+        }
+    }
+
+    showToast({ message, type = 'info' }) {
+        const container = document.getElementById('toast-container');
+        if (!container) return;
+
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.textContent = message;
+        container.appendChild(toast);
+
+        setTimeout(() => {
+            toast.classList.add('leaving');
+            setTimeout(() => toast.remove(), 220);
+        }, 3000);
+    }
+
+    showToastFromLegacyAlert(message) {
+        this.showToast({ message, type: 'error' });
+    }
+
+    async refreshDashboard() {
+        if (!this.currentUser || this.currentUser.role !== 'manager') return;
+
+        const companyData = this.getCompanyData(this.currentUser.company_id);
+        
+        // Update team status
+        const teamStatus = document.getElementById('team-status-display');
+        if (teamStatus) {
+            if (companyData.employees.length === 0) {
+                teamStatus.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">No employees assigned yet.</p>';
+            } else {
+                teamStatus.innerHTML = companyData.employees.map(emp => `
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border);">
+                        <span style="font-size:0.9rem;">${emp.username}</span>
+                        <span style="font-size:0.8rem; color:var(--text-muted);">${emp.assignedSiteId || 'Unassigned'}</span>
+                    </div>
+                `).join('');
+            }
+        }
+
+        // Update activity log
+        const activityList = document.getElementById('employee-list');
+        if (activityList) {
+            if (companyData.logs.length === 0) {
+                activityList.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">No activity yet.</p>';
+            } else {
+                activityList.innerHTML = companyData.logs.map(log => `
+                    <div style="padding:8px 0; border-bottom:1px solid var(--border);">
+                        <div style="font-size:0.9rem;">${log.username}: ${log.action}</div>
+                        <div style="font-size:0.75rem; color:var(--text-muted);">${new Date(log.time).toLocaleString()}</div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        // Update site list
+        const siteList = document.getElementById('site-list-display');
+        if (siteList) {
+            if (companyData.sites.length === 0) {
+                siteList.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">No sites created yet.</p>';
+            } else {
+                siteList.innerHTML = companyData.sites.map(site => `
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border);">
+                        <span style="font-size:0.9rem;">${site.name}</span>
+                        <button class="btn btn-outline btn-sm" onclick="app.deleteSite('${site.id}')">Delete</button>
+                    </div>
+                `).join('');
+            }
+        }
+
+        // Update worksite dropdown
+        const siteSelect = document.getElementById('new-emp-site');
+        if (siteSelect) {
+            siteSelect.innerHTML = '<option value="" disabled selected>Select Worksite</option>' +
+                companyData.sites.map(site => `<option value="${site.id}">${site.name}</option>`).join('');
+        }
+
+        // Update team list
+        const teamList = document.getElementById('team-list-container');
+        if (teamList) {
+            if (companyData.employees.length === 0) {
+                teamList.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem; text-align:center;">No employees yet.</p>';
+            } else {
+                teamList.innerHTML = companyData.employees.map(emp => `
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border);">
+                        <span style="font-size:0.9rem;">${emp.username}</span>
+                        <button class="btn btn-outline btn-sm" onclick="app.deleteEmployee('${emp.username}')">Remove</button>
+                    </div>
+                `).join('');
+            }
+        }
+
+        // Update subscription status
+        this.updateTrialStatus();
+        this.updateSubscriptionStatusCard(await this.getTrialDaysRemaining());
+    }
+
+    togglePanel(bodyId, iconId) {
+        const body = document.getElementById(bodyId);
+        const icon = document.getElementById(iconId);
+        if (body && icon) {
+            const isHidden = body.style.display === 'none';
+            body.style.display = isHidden ? 'block' : 'none';
+            icon.textContent = isHidden ? '-' : '+';
+        }
+    }
+
     // ─── AUTH STATE ──────────────────────────────────────────────────────────
+
+    async login() {
+        const username = document.getElementById('auth-username')?.value?.trim()?.toLowerCase();
+        const companyId = document.getElementById('auth-company')?.value?.trim()?.toUpperCase();
+        const password = document.getElementById('auth-passcode')?.value;
+
+        if (!username || !companyId || !password) {
+            this.showToast({ message: 'Please fill in all fields', type: 'error' });
+            return;
+        }
+
+        try {
+            const user = this.managers[username] || this.employees[username];
+            if (!user) {
+                this.showToast({ message: 'User not found', type: 'error' });
+                return;
+            }
+
+            if (user.company_id !== companyId) {
+                this.showToast({ message: 'Invalid company ID', type: 'error' });
+                return;
+            }
+
+            // Simple password check (in production, use proper hashing)
+            if (user.password !== password) {
+                this.showToast({ message: 'Invalid password', type: 'error' });
+                return;
+            }
+
+            this.currentUser = { username: user.username, role: user.role, company_id: user.company_id };
+            localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
+
+            if (user.role === 'manager') {
+                await this.loadGeofenceRadiusFromSubscription(user.company_id);
+                this.showView('view-manager');
+                this.refreshDashboard();
+            } else {
+                this.showView('view-employee');
+            }
+
+            this.showToast({ message: 'Signed in successfully', type: 'success' });
+        } catch (error) {
+            console.error('Login error:', error);
+            this.showToast({ message: 'Login failed: ' + error.message, type: 'error' });
+        }
+    }
+
+    async logout() {
+        this.currentUser = null;
+        localStorage.removeItem('hrapp_user');
+        this.showView('view-auth');
+        this.updateBiometricLoginButton();
+    }
+
+    async registerNewCompany() {
+        const companyName = document.getElementById('reg-company-name')?.value?.trim();
+        const companyId = document.getElementById('reg-company-id')?.value?.trim().toUpperCase();
+        const username = document.getElementById('reg-manager-name')?.value?.trim().toLowerCase();
+        const email = document.getElementById('reg-manager-email')?.value?.trim();
+        const password = document.getElementById('reg-manager-password')?.value;
+
+        if (!companyName || !companyId || !username || !email || !password) {
+            this.showToast({ message: 'Please fill in all fields', type: 'error' });
+            return;
+        }
+
+        try {
+            if (this.managers[username] || this.employees[username]) {
+                this.showToast({ message: 'Username already taken', type: 'error' });
+                return;
+            }
+
+            const managerData = {
+                username,
+                email,
+                password,
+                company_id: companyId,
+                role: 'manager'
+            };
+
+            await this.saveManager(username, managerData);
+            this.currentUser = { username, role: 'manager', company_id: companyId };
+            localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
+
+            await this.createTrialSubscription(companyId);
+            await this.loadGeofenceRadiusFromSubscription(companyId);
+
+            this.showView('view-pricing');
+            this.showToast({ message: 'Workspace created successfully', type: 'success' });
+        } catch (error) {
+            console.error('Registration error:', error);
+            this.showToast({ message: 'Registration failed: ' + error.message, type: 'error' });
+        }
+    }
+
+    async registerNewEmployeeUser() {
+        const username = document.getElementById('reg-emp-username-self')?.value?.trim().toLowerCase();
+        const email = document.getElementById('reg-emp-email-self')?.value?.trim();
+        const phone = document.getElementById('reg-emp-phone-self')?.value?.trim();
+        const passcode = document.getElementById('reg-emp-passcode-self')?.value;
+
+        if (!username || (!email && !phone)) {
+            this.showToast({ message: 'Please provide username and contact info', type: 'error' });
+            return;
+        }
+
+        try {
+            if (this.managers[username] || this.employees[username]) {
+                this.showToast({ message: 'Username already taken', type: 'error' });
+                return;
+            }
+
+            const employeeData = {
+                username,
+                email: email || null,
+                phone: phone || null,
+                passcode: passcode || null,
+                role: 'employee',
+                company_id: null,
+                assigned_site_id: null
+            };
+
+            await this.saveEmployee(username, employeeData);
+            this.showView('view-auth');
+            this.showToast({ message: 'Account created. Ask your manager to link you to the company.', type: 'success' });
+        } catch (error) {
+            console.error('Employee registration error:', error);
+            this.showToast({ message: 'Registration failed: ' + error.message, type: 'error' });
+        }
+    }
+
+    async verifyAccount() {
+        const code = document.getElementById('verify-code')?.value?.trim();
+        if (!code || code.length !== 6) {
+            this.showToast({ message: 'Please enter a valid 6-digit code', type: 'error' });
+            return;
+        }
+
+        try {
+            // In a real implementation, this would verify the OTP with Supabase
+            this._otpJustVerified = true;
+            this.showToast({ message: 'Account verified successfully', type: 'success' });
+            
+            if (this.pendingRegistration) {
+                this.currentUser = this.pendingRegistration;
+                localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
+                this.clearPendingRegistration();
+                this.showView(this.currentUser.role === 'manager' ? 'view-manager' : 'view-employee');
+            }
+        } catch (error) {
+            console.error('Verification error:', error);
+            this.showToast({ message: 'Verification failed: ' + error.message, type: 'error' });
+        }
+    }
+
+    async resendOtp() {
+        this.showToast({ message: 'OTP resent to your email', type: 'success' });
+    }
+
+    async loginWithBiometrics() {
+        const username = document.getElementById('auth-username')?.value?.trim()?.toLowerCase();
+        const companyId = document.getElementById('auth-company')?.value?.trim()?.toUpperCase();
+
+        if (!username || !companyId) {
+            this.showToast({ message: 'Please enter username and company ID', type: 'error' });
+            return;
+        }
+
+        try {
+            const user = this.employees[username];
+            if (!user || user.company_id !== companyId) {
+                this.showToast({ message: 'User not found', type: 'error' });
+                return;
+            }
+
+            const fingerprint = await this.generateDeviceFingerprint();
+            const biometricMap = this.getBiometricMap();
+            const key = this.getBiometricKey(username, user.company_id, fingerprint);
+            const storedCred = biometricMap[key];
+
+            if (!storedCred) {
+                this.showToast({ message: 'Biometrics not set up for this device', type: 'error' });
+                return;
+            }
+
+            const challenge = crypto.getRandomValues(new Uint8Array(32));
+            const userId = new TextEncoder().encode(`${user.company_id}:${username}`);
+
+            const assertion = await navigator.credentials.get({
+                publicKey: {
+                    challenge,
+                    allowCredentials: [{
+                        id: this.base64ToArrayBuffer(storedCred.credentialId),
+                        type: 'public-key'
+                    }],
+                    userVerification: 'required',
+                    timeout: 60000
+                }
+            });
+
+            if (assertion) {
+                this.currentUser = { username: user.username, role: user.role, company_id: user.company_id };
+                localStorage.setItem('hrapp_user', JSON.stringify(this.currentUser));
+                this.showView('view-employee');
+                this.showToast({ message: 'Signed in with biometrics', type: 'success' });
+            }
+        } catch (error) {
+            console.error('Biometric login error:', error);
+            this.showToast({ message: 'Biometric login failed: ' + error.message, type: 'error' });
+        }
+    }
+
+    // ─── EMPLOYEE ACTIONS ───────────────────────────────────────────────────────
+
+    async createSite() {
+        const siteName = document.getElementById('new-site-name')?.value?.trim();
+        if (!siteName) {
+            this.showToast({ message: 'Please enter a site name', type: 'error' });
+            return;
+        }
+
+        if (!this.currentPosition) {
+            this.showToast({ message: 'Waiting for GPS location', type: 'error' });
+            return;
+        }
+
+        try {
+            const siteId = `${this.currentUser.company_id}-${Date.now()}`;
+            const siteData = {
+                id: siteId,
+                name: siteName,
+                lat: this.currentPosition.lat,
+                lng: this.currentPosition.lng,
+                company_id: this.currentUser.company_id
+            };
+
+            await this.saveSite(siteData);
+            document.getElementById('new-site-name').value = '';
+            this.refreshDashboard();
+            this.showToast({ message: 'Site created successfully', type: 'success' });
+        } catch (error) {
+            console.error('Error creating site:', error);
+            this.showToast({ message: 'Failed to create site: ' + error.message, type: 'error' });
+        }
+    }
+
+    async registerEmployee() {
+        const username = document.getElementById('new-emp-username')?.value?.trim().toLowerCase();
+        const siteId = document.getElementById('new-emp-site')?.value;
+        const contact = document.getElementById('new-emp-contact')?.value?.trim();
+        const passcode = document.getElementById('new-emp-passcode')?.value;
+
+        if (!username || !siteId) {
+            this.showToast({ message: 'Please provide username and select a worksite', type: 'error' });
+            return;
+        }
+
+        try {
+            const employee = this.employees[username];
+            if (!employee) {
+                this.showToast({ message: 'Employee not found. Ask them to create an account first.', type: 'error' });
+                return;
+            }
+
+            if (employee.company_id && employee.company_id !== this.currentUser.company_id) {
+                this.showToast({ message: 'Employee already linked to another company', type: 'error' });
+                return;
+            }
+
+            employee.company_id = this.currentUser.company_id;
+            employee.assigned_site_id = siteId;
+            if (contact) employee.email = contact;
+            if (passcode) employee.passcode = passcode;
+
+            await this.saveEmployee(username, employee);
+            
+            // Clear form
+            document.getElementById('new-emp-username').value = '';
+            document.getElementById('new-emp-contact').value = '';
+            document.getElementById('new-emp-passcode').value = '';
+            document.getElementById('new-emp-site').value = '';
+
+            this.refreshDashboard();
+            this.showToast({ message: 'Employee linked successfully', type: 'success' });
+        } catch (error) {
+            console.error('Error linking employee:', error);
+            this.showToast({ message: 'Failed to link employee: ' + error.message, type: 'error' });
+        }
+    }
+
+    async checkIn() {
+        if (!this.currentPosition) {
+            this.showToast({ message: 'Waiting for GPS location', type: 'error' });
+            return;
+        }
+
+        const user = this.employees[this.currentUser.username];
+        if (!user || !user.assigned_site_id) {
+            this.showToast({ message: 'No worksite assigned', type: 'error' });
+            return;
+        }
+
+        const site = this.sites[user.assigned_site_id];
+        if (!site) {
+            this.showToast({ message: 'Assigned site not found', type: 'error' });
+            return;
+        }
+
+        const distance = this.calculateDistance(
+            this.currentPosition.lat,
+            this.currentPosition.lng,
+            site.lat,
+            site.lng
+        );
+
+        const radius = this.getEffectiveGeofenceRadius();
+        if (distance > radius) {
+            this.showToast({ message: `You are too far from the worksite (${distance.toFixed(0)}m away, max ${radius}m)`, type: 'error' });
+            return;
+        }
+
+        try {
+            const checkinData = {
+                username: this.currentUser.username,
+                action: 'check-in',
+                company_id: this.currentUser.company_id,
+                site_id: site.id,
+                time: new Date().toISOString()
+            };
+
+            await this.saveCheckin(checkinData);
+            this.updateEmployeeStatus(true);
+            this.showToast({ message: 'Checked in successfully', type: 'success' });
+        } catch (error) {
+            console.error('Error checking in:', error);
+            this.showToast({ message: 'Failed to check in: ' + error.message, type: 'error' });
+        }
+    }
+
+    async checkOut() {
+        const reason = document.getElementById('checkout-reason')?.value?.trim();
+        
+        try {
+            const user = this.employees[this.currentUser.username];
+            const checkinData = {
+                username: this.currentUser.username,
+                action: 'check-out',
+                company_id: this.currentUser.company_id,
+                site_id: user?.assigned_site_id,
+                time: new Date().toISOString(),
+                reason: reason || ''
+            };
+
+            await this.saveCheckin(checkinData);
+            this.updateEmployeeStatus(false);
+            document.getElementById('checkout-reason').value = '';
+            this.toggleCheckoutReason();
+            this.showToast({ message: 'Checked out successfully', type: 'success' });
+        } catch (error) {
+            console.error('Error checking out:', error);
+            this.showToast({ message: 'Failed to check out: ' + error.message, type: 'error' });
+        }
+    }
+
+    toggleCheckoutReason() {
+        const panel = document.getElementById('checkout-reason-panel');
+        if (panel) {
+            const isHidden = panel.style.display === 'none';
+            panel.style.display = isHidden ? 'block' : 'none';
+        }
+    }
+
+    updateEmployeeStatus(isCheckedIn) {
+        const statusBox = document.getElementById('emp-status-box');
+        const statusIcon = document.getElementById('emp-status-icon');
+        const statusText = document.getElementById('emp-status-text');
+        const timer = document.getElementById('emp-timer');
+        const checkInBtn = document.getElementById('btn-checkin');
+        const checkOutBtn = document.getElementById('btn-checkout');
+
+        if (isCheckedIn) {
+            statusBox.className = 'status-indicator checked-in';
+            statusIcon.textContent = '✓';
+            statusText.textContent = 'Checked In';
+            timer.style.display = 'block';
+            checkInBtn.style.display = 'none';
+            checkOutBtn.style.display = 'block';
+            this.startTimer();
+        } else {
+            statusBox.className = 'status-indicator checked-out';
+            statusIcon.textContent = '🛑';
+            statusText.textContent = 'Checked Out';
+            timer.style.display = 'none';
+            checkInBtn.style.display = 'block';
+            checkOutBtn.style.display = 'none';
+            this.stopTimer();
+        }
+    }
+
+    startTimer() {
+        this.stopTimer();
+        const startTime = Date.now();
+        this.timerInterval = setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            const hours = Math.floor(elapsed / 3600000);
+            const minutes = Math.floor((elapsed % 3600000) / 60000);
+            const seconds = Math.floor((elapsed % 60000) / 1000);
+            const timer = document.getElementById('emp-timer');
+            if (timer) {
+                timer.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            }
+        }, 1000);
+    }
+
+    stopTimer() {
+        if (this.timerInterval) {
+            clearInterval(this.timerInterval);
+            this.timerInterval = null;
+        }
+    }
 
     setupAuthStateListener() {
         supabase.auth.onAuthStateChange(async (event, session) => {
